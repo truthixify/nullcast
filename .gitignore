@@ -6,7 +6,7 @@
 # Dependencies
 node_modules/
 
-# Hardhat
+# Hardhat (contracts/)
 artifacts/
 cache/
 coverage/
@@ -23,9 +23,9 @@ private-key.txt
 # OS
 .DS_Store
 
-# Frontend
-frontend/.next/
-frontend/out/
+# Frontend (client/)
+client/.next/
+client/out/
 
 # IDE
 .vscode/
