@@ -1,0 +1,32 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Hardhat
+artifacts/
+cache/
+coverage/
+typechain-types/
+fhevmTemp/
+
+# Deployment secrets
+deployments/sepolia-private/
+*.key
+*.pem
+mnemonic.txt
+private-key.txt
+
+# OS
+.DS_Store
+
+# Frontend
+frontend/.next/
+frontend/out/
+
+# IDE
+.vscode/
+.idea/
