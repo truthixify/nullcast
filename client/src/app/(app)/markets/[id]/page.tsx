@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, use } from "react";
+import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useAccount, useReadContract } from "wagmi";
 import {
@@ -91,9 +91,9 @@ type BetStep = "idle" | "encrypting" | "needs-sdk" | "writing" | "confirming" | 
 export default function MarketDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }) {
-  const { id: rawId } = use(params);
+  const { id: rawId } = params;
   const marketId = parseInt(rawId, 10);
   const isValidId = !isNaN(marketId) && marketId >= 0;
 
