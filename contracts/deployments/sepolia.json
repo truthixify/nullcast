@@ -1,0 +1,33 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployer": "0x33b69cA4EA27Ad2f83AB73cd6bBf635Cf25E5812",
+  "deployedAt": "2026-04-19T22:02:51.065Z",
+  "contracts": {
+    "MockcUSDT": "0x9797Dd36EeE3690F75DFe643B41A8cDAf4A45Ba5",
+    "OracleMock": "0x74Bb4A44cceab6a9fA5eDB3455b888007CcF4e20",
+    "ReputationGate": "0xD0749876b631f29a7B8f02BBcd11eccBd895a370",
+    "NullCastFactory": "0x303DFB1AfE61EE450afcb45663875092d8A231A5"
+  },
+  "markets": {
+    "BTC-1": {
+      "id": 0,
+      "address": "0xD50aA290A6Ba5623A1583705aaA3c7E892297505",
+      "question": "BTC above $90,000 on April 30, 2026?",
+      "type": "binary"
+    },
+    "ETH-1": {
+      "id": 1,
+      "address": "0x30D95077456a6c00b89295a2cee081a3C5C30aF9",
+      "question": "ETH above $2,000 on May 5, 2026?",
+      "type": "binary"
+    },
+    "SCALAR-1": {
+      "id": 2,
+      "address": "0x1fd7597916872Db43275BFA90Efd118c82C5473d",
+      "question": "BTC price range on May 10: <$80k / $80k-$100k / >$100k",
+      "type": "scalar",
+      "buckets": 3
+    }
+  }
+}

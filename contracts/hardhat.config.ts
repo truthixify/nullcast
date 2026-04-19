@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import "@fhevm/hardhat-plugin";
@@ -27,6 +28,9 @@ const config: HardhatUserConfig = {
   gasReporter: {
     enabled: process.env.REPORT_GAS === "true",
     currency: "USD",
+  },
+  etherscan: {
+    apiKey: process.env.ETHERSCAN_API_KEY || "",
   },
   typechain: {
     outDir: "typechain-types",
