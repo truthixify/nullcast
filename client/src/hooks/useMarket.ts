@@ -3,10 +3,14 @@
 import { useReadContract, useReadContracts } from "wagmi";
 import { getMarketConfig } from "@/lib/contracts";
 
-export function useMarket(marketAddress: `0x${string}`) {
+interface UseMarketOptions {
+  refetchInterval?: number;
+}
+
+export function useMarket(marketAddress: `0x${string}`, options?: UseMarketOptions) {
   const config = getMarketConfig(marketAddress);
 
-  const { data, isLoading, error } = useReadContracts({
+  const { data, isLoading, error, refetch } = useReadContracts({
     contracts: [
       { ...config, functionName: "question" },
       { ...config, functionName: "status" },
@@ -20,6 +24,9 @@ export function useMarket(marketAddress: `0x${string}`) {
       { ...config, functionName: "marketId" },
       { ...config, functionName: "bucketCount" },
     ],
+    query: {
+      refetchInterval: options?.refetchInterval,
+    },
   });
 
   const question = data?.[0]?.result as string | undefined;
@@ -59,6 +66,7 @@ export function useMarket(marketAddress: `0x${string}`) {
     noOdds,
     isLoading,
     error,
+    refetch,
   };
 }
 

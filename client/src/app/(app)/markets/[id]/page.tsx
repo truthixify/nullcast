@@ -1,399 +1,90 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useMemo, useCallback, use } from "react";
 import Link from "next/link";
+import { useAccount, useReadContract } from "wagmi";
 import {
   FHEBadge,
   LockIcon,
   IconChevronLeft,
-  IconFlame,
   IconClock,
   IconCheck,
   IconShield,
+  IconWallet,
+  IconInfo,
+  IconExternal,
 } from "@/components/shared/Icons";
 import { OddsBar } from "@/components/shared/OddsBar";
 import { EncryptedValue } from "@/components/shared/EncryptedValue";
+import { useMarket, useHasPosition } from "@/hooks/useMarket";
+import { usePlaceBet } from "@/hooks/usePlaceBet";
+import { useClaimWinnings } from "@/hooks/useClaimWinnings";
+import { nullCastFactoryConfig } from "@/lib/contracts";
+import { useNullCastStore } from "@/lib/store";
 
-/* ── Demo data ────────────────────────────────────────────────── */
+/* ── Status helpers ──────────────────────────────────────────── */
 
-interface MarketDetail {
-  id: string;
-  q: string;
-  category: string;
-  yes: number;
-  no: number;
-  pool: number;
-  volume24h: number;
-  expiry: string;
-  expiryBlocks: number;
-  bets: number;
-  trend: number;
-  hot: boolean;
-  history: number[];
-  description: string;
-  oracle: string;
-  resolver: string;
-  creator: string;
-  fee: string;
-  minStake: string;
-  reputation: string;
-}
-
-const MARKETS: Record<string, MarketDetail> = {
-  "btc-120k": {
-    id: "btc-120k",
-    q: "Will BTC exceed $120K by June 2026?",
-    category: "Crypto",
-    yes: 67,
-    no: 33,
-    pool: 48200,
-    volume24h: 12400,
-    expiry: "Jun 30, 2026",
-    expiryBlocks: 891200,
-    bets: 342,
-    trend: 5,
-    hot: true,
-    history: [42, 45, 48, 51, 55, 53, 58, 62, 60, 64, 67, 65],
-    description:
-      "This market resolves YES if the price of Bitcoin (BTC) exceeds $120,000 USD on any major exchange (Binance, Coinbase, Kraken) at any point before June 30, 2026 23:59 UTC. Price is determined by the volume-weighted average price (VWAP) across at least two exchanges.",
-    oracle: "Chainlink",
-    resolver: "0x7f2c...4d91",
-    creator: "0x4a2c...9f1e",
-    fee: "2.0%",
-    minStake: "5 cUSDT",
-    reputation: ">= 40",
-  },
-  "gpt6-2026": {
-    id: "gpt6-2026",
-    q: "Will OpenAI release GPT-6 before 2027?",
-    category: "Tech",
-    yes: 54,
-    no: 46,
-    pool: 31500,
-    volume24h: 8900,
-    expiry: "Dec 31, 2026",
-    expiryBlocks: 1223400,
-    bets: 218,
-    trend: 3,
-    hot: true,
-    history: [50, 52, 49, 53, 51, 55, 54, 52, 56, 54, 53, 54],
-    description:
-      "Resolves YES if OpenAI publicly announces and releases a model explicitly branded as GPT-6 (or the next major version successor) before December 31, 2026 23:59 UTC.",
-    oracle: "Chainlink",
-    resolver: "0x7f2c...4d91",
-    creator: "0x88d1...c2b4",
-    fee: "2.0%",
-    minStake: "5 cUSDT",
-    reputation: ">= 40",
-  },
-  "eth-etf-flows": {
-    id: "eth-etf-flows",
-    q: "Will ETH ETF net inflows exceed $10B in 2026?",
-    category: "Crypto",
-    yes: 41,
-    no: 59,
-    pool: 22800,
-    volume24h: 5600,
-    expiry: "Dec 31, 2026",
-    expiryBlocks: 1223400,
-    bets: 156,
-    trend: -2,
-    hot: false,
-    history: [55, 52, 48, 50, 46, 44, 42, 45, 43, 41, 40, 41],
-    description:
-      "Resolves YES if the cumulative net inflows into all US-listed spot Ethereum ETFs exceed $10 billion USD by December 31, 2026 23:59 UTC.",
-    oracle: "Chainlink",
-    resolver: "0x7f2c...4d91",
-    creator: "0xff01...ae20",
-    fee: "2.0%",
-    minStake: "5 cUSDT",
-    reputation: ">= 40",
-  },
-  "sb-2026-niners": {
-    id: "sb-2026-niners",
-    q: "Will the 49ers win Super Bowl LXI?",
-    category: "Sports",
-    yes: 18,
-    no: 82,
-    pool: 15400,
-    volume24h: 3200,
-    expiry: "Feb 8, 2027",
-    expiryBlocks: 1280000,
-    bets: 89,
-    trend: 0,
-    hot: false,
-    history: [20, 19, 21, 18, 17, 19, 18, 20, 19, 18, 17, 18],
-    description:
-      "Resolves YES if the San Francisco 49ers win Super Bowl LXI. The result is determined by the official NFL outcome.",
-    oracle: "Chainlink",
-    resolver: "0x7f2c...4d91",
-    creator: "0x4a2c...9f1e",
-    fee: "2.0%",
-    minStake: "5 cUSDT",
-    reputation: ">= 40",
-  },
-  "fed-cut-q2": {
-    id: "fed-cut-q2",
-    q: "Will the Fed cut rates in Q2 2026?",
-    category: "Macro",
-    yes: 72,
-    no: 28,
-    pool: 38600,
-    volume24h: 9800,
-    expiry: "Jun 30, 2026",
-    expiryBlocks: 891200,
-    bets: 274,
-    trend: 4,
-    hot: true,
-    history: [58, 60, 63, 61, 65, 68, 66, 70, 69, 72, 71, 72],
-    description:
-      "Resolves YES if the Federal Reserve announces a federal funds rate cut at any FOMC meeting during Q2 2026 (April 1 - June 30).",
-    oracle: "Chainlink",
-    resolver: "0x7f2c...4d91",
-    creator: "0x88d1...c2b4",
-    fee: "2.0%",
-    minStake: "5 cUSDT",
-    reputation: ">= 40",
-  },
-  "solana-flip": {
-    id: "solana-flip",
-    q: "Will Solana flip Ethereum in TVL by 2027?",
-    category: "Crypto",
-    yes: 23,
-    no: 77,
-    pool: 19200,
-    volume24h: 4100,
-    expiry: "Dec 31, 2026",
-    expiryBlocks: 1223400,
-    bets: 132,
-    trend: -3,
-    hot: false,
-    history: [30, 28, 26, 29, 25, 24, 27, 25, 23, 24, 22, 23],
-    description:
-      "Resolves YES if Solana total value locked (TVL) exceeds Ethereum TVL according to DefiLlama at any point before December 31, 2026.",
-    oracle: "Chainlink",
-    resolver: "0x7f2c...4d91",
-    creator: "0xff01...ae20",
-    fee: "2.0%",
-    minStake: "5 cUSDT",
-    reputation: ">= 40",
-  },
-  "ai-hardware-ipo": {
-    id: "ai-hardware-ipo",
-    q: "Will a major AI chip startup IPO in 2026?",
-    category: "Markets",
-    yes: 61,
-    no: 39,
-    pool: 27400,
-    volume24h: 7300,
-    expiry: "Dec 31, 2026",
-    expiryBlocks: 1223400,
-    bets: 198,
-    trend: 2,
-    hot: false,
-    history: [48, 50, 52, 55, 53, 57, 56, 58, 60, 59, 62, 61],
-    description:
-      "Resolves YES if any AI hardware company (Cerebras, Groq, SambaNova, etc.) with a pre-IPO valuation above $5B completes an IPO on a US exchange in 2026.",
-    oracle: "Chainlink",
-    resolver: "0x7f2c...4d91",
-    creator: "0x4a2c...9f1e",
-    fee: "2.0%",
-    minStake: "5 cUSDT",
-    reputation: ">= 40",
-  },
-  "tsla-split": {
-    id: "tsla-split",
-    q: "Will Tesla announce another stock split in 2026?",
-    category: "Markets",
-    yes: 35,
-    no: 65,
-    pool: 11800,
-    volume24h: 2100,
-    expiry: "Dec 31, 2026",
-    expiryBlocks: 1223400,
-    bets: 74,
-    trend: -1,
-    hot: false,
-    history: [40, 38, 36, 39, 37, 35, 38, 36, 34, 36, 35, 35],
-    description:
-      "Resolves YES if Tesla, Inc. (TSLA) announces a stock split of any ratio during 2026.",
-    oracle: "Chainlink",
-    resolver: "0x7f2c...4d91",
-    creator: "0x88d1...c2b4",
-    fee: "2.0%",
-    minStake: "5 cUSDT",
-    reputation: ">= 40",
-  },
+const STATUS_LABELS: Record<number, string> = {
+  0: "OPEN",
+  1: "EXPIRED",
+  2: "RESOLVING",
+  3: "RESOLVED",
+  4: "CANCELLED",
 };
 
-interface Activity {
-  side: "YES" | "NO";
-  bettor: string;
-  time: string;
-}
+const STATUS_PILL_CLASS: Record<number, string> = {
+  0: "pill-yes",
+  1: "pill-warning",
+  2: "pill-warning",
+  3: "pill-privacy",
+  4: "pill-no",
+};
 
-const ACTIVITY: Activity[] = [
-  { side: "YES", bettor: "0x4a2c...9f1e", time: "2 blocks ago" },
-  { side: "NO", bettor: "0x88d1...c2b4", time: "5 blocks ago" },
-  { side: "YES", bettor: "0xff01...ae20", time: "7 blocks ago" },
-  { side: "YES", bettor: "0x12ab...3c4d", time: "11 blocks ago" },
-  { side: "NO", bettor: "0xde91...7f2a", time: "14 blocks ago" },
-  { side: "YES", bettor: "0x9c3e...a1b8", time: "19 blocks ago" },
-  { side: "NO", bettor: "0x6d4f...e5c2", time: "22 blocks ago" },
-  { side: "YES", bettor: "0x2b8a...d9f0", time: "28 blocks ago" },
-];
+const MARKET_TYPE_LABELS: Record<number, string> = {
+  0: "Binary",
+  1: "Scalar",
+};
 
-const TIME_RANGES = ["1D", "7D", "30D", "ALL"];
-
-/* ── Chart component ──────────────────────────────────────────── */
-
-function OddsChart({
-  data,
-  timeRange,
-  onTimeRangeChange,
-}: {
-  data: number[];
-  timeRange: string;
-  onTimeRangeChange: (range: string) => void;
-}) {
-  const w = 560;
-  const h = 200;
-  const px = 40;
-  const py = 20;
-  const cw = w - px * 2;
-  const ch = h - py * 2;
-
-  const gridLines = [0, 25, 50, 75, 100];
-
-  const points = data.map((val, i) => {
-    const x = px + (i / (data.length - 1)) * cw;
-    const y = py + ch - (val / 100) * ch;
-    return { x, y };
+function formatCUSDT(raw: bigint | undefined): string {
+  if (raw === undefined) return "0";
+  return (Number(raw) / 1e6).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   });
-
-  const pathD = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
-
-  const lastPoint = points[points.length - 1];
-
-  const areaD = `${pathD} L${lastPoint.x},${py + ch} L${px},${py + ch} Z`;
-
-  return (
-    <div>
-      <svg
-        width="100%"
-        viewBox={`0 0 ${w} ${h}`}
-        style={{ display: "block" }}
-      >
-        <defs>
-          <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.2" />
-            <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-
-        {/* Grid lines */}
-        {gridLines.map((pct) => {
-          const y = py + ch - (pct / 100) * ch;
-          return (
-            <g key={pct}>
-              <line
-                x1={px}
-                y1={y}
-                x2={w - px}
-                y2={y}
-                stroke="var(--color-chart-grid)"
-                strokeWidth="1"
-              />
-              <text
-                x={px - 8}
-                y={y + 4}
-                textAnchor="end"
-                fill="var(--color-text-tertiary)"
-                fontSize="10"
-                fontFamily="var(--font-mono)"
-              >
-                {pct}%
-              </text>
-            </g>
-          );
-        })}
-
-        {/* Area fill */}
-        <path d={areaD} fill="url(#chartGrad)" />
-
-        {/* Line */}
-        <path
-          d={pathD}
-          fill="none"
-          stroke="var(--color-chart-line)"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        {/* Animated endpoint dot */}
-        <circle
-          cx={lastPoint.x}
-          cy={lastPoint.y}
-          r="4"
-          fill="var(--color-accent)"
-          stroke="var(--color-bg-surface)"
-          strokeWidth="2"
-        >
-          <animate
-            attributeName="r"
-            values="4;6;4"
-            dur="2s"
-            repeatCount="indefinite"
-          />
-        </circle>
-        <circle
-          cx={lastPoint.x}
-          cy={lastPoint.y}
-          r="8"
-          fill="none"
-          stroke="var(--color-accent)"
-          strokeWidth="1"
-          opacity="0.3"
-        >
-          <animate
-            attributeName="r"
-            values="8;14;8"
-            dur="2s"
-            repeatCount="indefinite"
-          />
-          <animate
-            attributeName="opacity"
-            values="0.3;0;0.3"
-            dur="2s"
-            repeatCount="indefinite"
-          />
-        </circle>
-      </svg>
-
-      {/* Time range chips */}
-      <div
-        style={{
-          display: "flex",
-          gap: "4px",
-          marginTop: "12px",
-        }}
-      >
-        {TIME_RANGES.map((range) => (
-          <button
-            key={range}
-            className={`chip${range === timeRange ? " chip--active" : ""}`}
-            onClick={() => onTimeRangeChange(range)}
-            type="button"
-            style={{ fontSize: "11px", padding: "4px 10px" }}
-          >
-            {range}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
+
+function truncateAddress(addr: string): string {
+  if (addr.length <= 10) return addr;
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
+
+/* ── Encryption helper (FHEVM SDK placeholder) ───────────────── */
+
+/**
+ * Placeholder for FHEVM client-side encryption.
+ * In production, this would use @fhevm/sdk to:
+ *   1. Initialize the FHEVM instance with the gateway URL
+ *   2. Call instance.createEncryptedInput(contractAddress, userAddress)
+ *   3. Add the uint64 amount via .add64(amountInBaseUnits)
+ *   4. Encrypt and return { handle, inputProof }
+ *
+ * For the demo, we simulate the encryption UX flow but cannot produce
+ * real encrypted inputs without the full FHEVM SDK gateway connection.
+ */
+async function simulateFHEEncryption(
+  _amount: number // eslint-disable-line @typescript-eslint/no-unused-vars
+): Promise<{ encrypted: `0x${string}`; proof: `0x${string}` } | null> {
+  // Simulate encryption delay (real FHE encryption takes ~1-3s)
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+
+  // In production, this would return real encrypted handles from the FHEVM SDK.
+  // Returning null signals that real encryption is not available.
+  return null;
+}
+
+/* ── Bet flow step type ──────────────────────────────────────── */
+
+type BetStep = "idle" | "encrypting" | "needs-sdk" | "writing" | "confirming" | "confirmed" | "error";
 
 /* ── Main page ────────────────────────────────────────────────── */
 
@@ -402,35 +93,147 @@ export default function MarketDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = use(params);
-  const market = MARKETS[id];
+  const { id: rawId } = use(params);
+  const marketId = parseInt(rawId, 10);
+  const isValidId = !isNaN(marketId) && marketId >= 0;
 
+  /* ── Resolve market address from factory ────────────────────── */
+  const {
+    data: marketAddress,
+    isLoading: isAddressLoading,
+    error: addressError,
+  } = useReadContract({
+    ...nullCastFactoryConfig,
+    functionName: "getMarket",
+    args: [BigInt(isValidId ? marketId : 0)],
+    query: { enabled: isValidId },
+  });
+
+  const resolvedAddress = marketAddress as `0x${string}` | undefined;
+  const isZeroAddress =
+    resolvedAddress === "0x0000000000000000000000000000000000000000";
+  const hasAddress = !!resolvedAddress && !isZeroAddress;
+
+  /* ── Market state (polls every 12s for live odds) ───────────── */
+  const market = useMarket(
+    hasAddress ? resolvedAddress : ("0x0000000000000000000000000000000000000000" as `0x${string}`),
+    { refetchInterval: hasAddress ? 12_000 : undefined }
+  );
+
+  /* ── Wallet & position ──────────────────────────────────────── */
+  const { address: userAddress, isConnected } = useAccount();
+  const hasPosition = useHasPosition(
+    hasAddress ? resolvedAddress : ("0x0000000000000000000000000000000000000000" as `0x${string}`),
+    userAddress
+  );
+
+  const { data: hasClaimed } = useReadContract({
+    address: hasAddress ? resolvedAddress : undefined,
+    abi: [
+      {
+        inputs: [{ internalType: "address", name: "user", type: "address" }],
+        name: "hasClaimed",
+        outputs: [{ internalType: "bool", name: "", type: "bool" }],
+        stateMutability: "view",
+        type: "function",
+      },
+    ],
+    functionName: "hasClaimed",
+    args: userAddress ? [userAddress] : undefined,
+    query: { enabled: hasAddress && !!userAddress },
+  });
+
+  /* ── Betting hooks ──────────────────────────────────────────── */
+  const bet = usePlaceBet(
+    hasAddress ? resolvedAddress : ("0x0000000000000000000000000000000000000000" as `0x${string}`)
+  );
+  const claim = useClaimWinnings(
+    hasAddress ? resolvedAddress : ("0x0000000000000000000000000000000000000000" as `0x${string}`)
+  );
+
+  /* ── Zustand store ──────────────────────────────────────────── */
+  const addPosition = useNullCastStore((s) => s.addPosition);
+  const storedPositions = useNullCastStore((s) => s.positions);
+
+  /* ── Local UI state ─────────────────────────────────────────── */
   const [side, setSide] = useState<"YES" | "NO">("YES");
   const [amount, setAmount] = useState("100");
-  const [timeRange, setTimeRange] = useState("30D");
-  const [betPlaced, setBetPlaced] = useState(false);
+  const [betStep, setBetStep] = useState<BetStep>("idle");
   const [positionRevealed, setPositionRevealed] = useState(false);
 
-  /* Live odds simulation */
-  const [liveYes, setLiveYes] = useState(market?.yes ?? 50);
-  const [liveNo, setLiveNo] = useState(market?.no ?? 50);
-  const [pulsing, setPulsing] = useState(false);
+  /* ── Derived values ─────────────────────────────────────────── */
+  const amountNum = parseFloat(amount) || 0;
+  const yesPct = market.yesOdds;
+  const noPct = market.noOdds;
+  const selectedPct = side === "YES" ? yesPct : noPct;
+  const multiplier = selectedPct > 0 ? (100 / selectedPct).toFixed(2) : "0.00";
+  const payout = (amountNum * parseFloat(multiplier)).toFixed(2);
+  const profit = (parseFloat(payout) - amountNum).toFixed(2);
 
-  useEffect(() => {
-    if (!market) return;
-    const interval = setInterval(() => {
-      const delta = (Math.random() - 0.5) * 4;
-      const newYes = Math.max(5, Math.min(95, liveYes + delta));
-      const newNo = 100 - newYes;
-      setLiveYes(Math.round(newYes));
-      setLiveNo(Math.round(newNo));
-      setPulsing(true);
-      setTimeout(() => setPulsing(false), 700);
-    }, 4500);
-    return () => clearInterval(interval);
-  }, [market, liveYes]);
+  const minimumBetCUSDT = market.minimumBet
+    ? Number(market.minimumBet) / 1e6
+    : 0;
+  const isAmountBelowMin = amountNum > 0 && amountNum < minimumBetCUSDT;
+  const isMarketOpen = market.status === 0;
+  const isMarketResolved = market.status === 3;
+  const isMarketCancelled = market.status === 4;
 
-  if (!market) {
+  const localPosition = useMemo(
+    () =>
+      hasAddress
+        ? storedPositions.find((p) => p.marketAddress === resolvedAddress)
+        : undefined,
+    [storedPositions, resolvedAddress, hasAddress]
+  );
+
+  const quickAmounts = [25, 50, 100, 250];
+
+  /* ── Bet handler ────────────────────────────────────────────── */
+  const handlePlaceBet = useCallback(async () => {
+    if (!isConnected || !hasAddress || !isMarketOpen) return;
+    if (amountNum <= 0 || isAmountBelowMin) return;
+
+    setBetStep("encrypting");
+
+    const encResult = await simulateFHEEncryption(amountNum);
+
+    if (!encResult) {
+      // Real FHE encryption not available -- show SDK notice
+      setBetStep("needs-sdk");
+      return;
+    }
+
+    // If real encryption were available, we would call:
+    // bet.placeBet(encResult.encrypted, encResult.proof, side === "YES");
+    // setBetStep("writing");
+  }, [isConnected, hasAddress, isMarketOpen, amountNum, isAmountBelowMin, side]);
+
+  // Track bet confirmation from the write hook
+  const isBetConfirmed = bet.isConfirmed;
+  const isBetWriting = bet.isWriting;
+  const isBetConfirming = bet.isConfirming;
+
+  // When bet is confirmed, track in Zustand
+  if (isBetConfirmed && betStep === "confirming" && hasAddress && resolvedAddress) {
+    addPosition({
+      marketAddress: resolvedAddress,
+      side,
+      amount: amountNum,
+      revealed: false,
+      entryOdds: selectedPct,
+      txHash: bet.hash,
+    });
+    setBetStep("confirmed");
+  }
+
+  /* ── Claim handler ──────────────────────────────────────────── */
+  const handleClaim = useCallback(() => {
+    if (!isConnected || !hasAddress) return;
+    claim.claimWinnings();
+  }, [isConnected, hasAddress, claim]);
+
+  /* ── Loading state ──────────────────────────────────────────── */
+  if (!isValidId) {
     return (
       <div
         className="container"
@@ -441,7 +244,7 @@ export default function MarketDetailPage({
         }}
       >
         <p style={{ fontSize: "var(--text-lg)", marginBottom: "12px" }}>
-          Market not found
+          Invalid market ID
         </p>
         <Link href="/markets" className="btn btn-secondary">
           <IconChevronLeft size={14} />
@@ -451,23 +254,99 @@ export default function MarketDetailPage({
     );
   }
 
-  const amountNum = parseFloat(amount) || 0;
-  const yesPct = liveYes;
-  const noPct = liveNo;
-  const selectedPct = side === "YES" ? yesPct : noPct;
-  const multiplier = selectedPct > 0 ? (100 / selectedPct).toFixed(2) : "0.00";
-  const payout = (amountNum * parseFloat(multiplier)).toFixed(2);
-  const profit = (parseFloat(payout) - amountNum).toFixed(2);
+  if (isAddressLoading || (hasAddress && market.isLoading)) {
+    return (
+      <div
+        className="container"
+        style={{
+          paddingTop: "80px",
+          textAlign: "center",
+          color: "var(--color-text-tertiary)",
+        }}
+      >
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "12px",
+            fontSize: "var(--text-md)",
+          }}
+        >
+          <span
+            className="live-dot"
+            style={{ width: "8px", height: "8px" }}
+          />
+          Loading market data from Sepolia...
+        </div>
+      </div>
+    );
+  }
 
-  const handlePlaceBet = () => {
-    setBetPlaced(true);
-    setTimeout(() => setBetPlaced(false), 5000);
-  };
+  if (addressError || !hasAddress) {
+    return (
+      <div
+        className="container"
+        style={{
+          paddingTop: "80px",
+          textAlign: "center",
+          color: "var(--color-text-tertiary)",
+        }}
+      >
+        <p style={{ fontSize: "var(--text-lg)", marginBottom: "12px" }}>
+          Market #{marketId} not found
+        </p>
+        <p
+          style={{
+            fontSize: "var(--text-sm)",
+            marginBottom: "20px",
+            color: "var(--color-text-tertiary)",
+          }}
+        >
+          This market may not exist on the factory contract.
+        </p>
+        <Link href="/markets" className="btn btn-secondary">
+          <IconChevronLeft size={14} />
+          Back to Markets
+        </Link>
+      </div>
+    );
+  }
 
-  const quickAmounts = [25, 50, 100, 250];
+  if (market.error) {
+    return (
+      <div
+        className="container"
+        style={{
+          paddingTop: "80px",
+          textAlign: "center",
+          color: "var(--color-text-tertiary)",
+        }}
+      >
+        <p style={{ fontSize: "var(--text-lg)", marginBottom: "12px" }}>
+          Error loading market
+        </p>
+        <p
+          style={{
+            fontSize: "var(--text-sm)",
+            marginBottom: "20px",
+            fontFamily: "var(--font-mono)",
+          }}
+        >
+          {market.error.message}
+        </p>
+        <Link href="/markets" className="btn btn-secondary">
+          <IconChevronLeft size={14} />
+          Back to Markets
+        </Link>
+      </div>
+    );
+  }
 
   return (
-    <div className="container" style={{ paddingTop: "32px", paddingBottom: "80px" }}>
+    <div
+      className="container"
+      style={{ paddingTop: "32px", paddingBottom: "80px" }}
+    >
       <div className="detail-grid">
         {/* ── Left column ─────────────────────────────────────── */}
         <div>
@@ -491,25 +370,37 @@ export default function MarketDetailPage({
               marginBottom: "16px",
             }}
           >
-            <span className="pill">{market.category}</span>
-            {market.hot && (
-              <span className="pill pill-warning">
-                <IconFlame size={11} stroke="var(--color-warning-text)" />
-                Hot
+            {/* Market type pill */}
+            <span className="pill">
+              {MARKET_TYPE_LABELS[market.marketType ?? 0] ?? "Binary"}
+            </span>
+
+            {/* Status badge */}
+            {market.status !== undefined && (
+              <span
+                className={`pill ${STATUS_PILL_CLASS[market.status] ?? ""}`}
+              >
+                {STATUS_LABELS[market.status] ?? "UNKNOWN"}
               </span>
             )}
+
             <FHEBadge />
-            <span
-              className="pill"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "4px",
-              }}
-            >
-              <IconClock size={11} />
-              {market.expiry}
-            </span>
+
+            {/* Expiry block */}
+            {market.expiryBlock && (
+              <span
+                className="pill"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <IconClock size={11} />
+                Block {market.expiryBlock.toString()}
+              </span>
+            )}
+
             <span
               className="mono"
               style={{
@@ -517,7 +408,7 @@ export default function MarketDetailPage({
                 color: "var(--color-text-tertiary)",
               }}
             >
-              ID: {market.id}
+              ID: {marketId}
             </span>
           </div>
 
@@ -532,7 +423,7 @@ export default function MarketDetailPage({
               lineHeight: "var(--leading-snug)",
             }}
           >
-            {market.q}
+            {market.question ?? "Loading..."}
           </h1>
 
           {/* OddsBar card */}
@@ -568,47 +459,19 @@ export default function MarketDetailPage({
                 }}
               >
                 <span className="live-dot" />
-                Live
+                Polling every 12s
               </span>
             </div>
             <OddsBar
-              yes={liveYes}
-              no={liveNo}
+              yes={yesPct}
+              no={noPct}
               large
-              pool={market.pool}
-              lastUpdate="Updated live"
-              pulsing={pulsing}
+              pool={market.totalPool}
+              lastUpdate="Live from chain"
             />
           </div>
 
-          {/* Odds chart */}
-          <div className="card" style={{ marginBottom: "28px" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "16px",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "var(--text-sm)",
-                  fontWeight: 600,
-                  color: "var(--color-text-secondary)",
-                }}
-              >
-                Odds History
-              </span>
-            </div>
-            <OddsChart
-              data={market.history}
-              timeRange={timeRange}
-              onTimeRangeChange={setTimeRange}
-            />
-          </div>
-
-          {/* Resolution rules */}
+          {/* Market details card */}
           <div className="card" style={{ marginBottom: "28px" }}>
             <div
               style={{
@@ -626,33 +489,91 @@ export default function MarketDetailPage({
                   color: "var(--color-text-secondary)",
                 }}
               >
-                Resolution Rules
+                Market Details
               </span>
             </div>
-            <p
-              style={{
-                fontSize: "var(--text-sm)",
-                color: "var(--color-text-secondary)",
-                lineHeight: "var(--leading-normal)",
-                marginBottom: "20px",
-              }}
-            >
-              {market.description}
-            </p>
+
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr 1fr",
-                gap: "12px",
+                gap: "16px",
               }}
             >
               {[
-                { label: "Oracle", value: market.oracle },
-                { label: "Resolver", value: market.resolver, mono: true },
-                { label: "Creator", value: market.creator, mono: true },
-                { label: "Fee", value: market.fee },
-                { label: "Min stake", value: market.minStake },
-                { label: "Reputation", value: market.reputation },
+                {
+                  label: "Oracle",
+                  value: market.oracle
+                    ? truncateAddress(market.oracle)
+                    : "--",
+                  mono: true,
+                },
+                {
+                  label: "Contract",
+                  value: resolvedAddress
+                    ? truncateAddress(resolvedAddress)
+                    : "--",
+                  mono: true,
+                },
+                {
+                  label: "Market type",
+                  value:
+                    MARKET_TYPE_LABELS[market.marketType ?? 0] ?? "Binary",
+                },
+                {
+                  label: "Minimum bet",
+                  value: market.minimumBet
+                    ? `${formatCUSDT(market.minimumBet)} cUSDT`
+                    : "--",
+                },
+                {
+                  label: "Yes pool",
+                  value: `${market.yesPool.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })} cUSDT`,
+                },
+                {
+                  label: "No pool",
+                  value: `${market.noPool.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })} cUSDT`,
+                },
+                {
+                  label: "Expiry block",
+                  value: market.expiryBlock
+                    ? market.expiryBlock.toString()
+                    : "--",
+                  mono: true,
+                },
+                {
+                  label: "Status",
+                  value: STATUS_LABELS[market.status ?? 0] ?? "UNKNOWN",
+                },
+                ...(market.marketType === 1
+                  ? [
+                      {
+                        label: "Buckets",
+                        value: market.bucketCount?.toString() ?? "--",
+                      },
+                    ]
+                  : []),
+                ...(isMarketResolved
+                  ? [
+                      {
+                        label: "Resolved outcome",
+                        value:
+                          market.resolvedOutcome !== undefined
+                            ? market.resolvedOutcome === BigInt(1)
+                              ? "YES"
+                              : market.resolvedOutcome === BigInt(0)
+                                ? "NO"
+                                : market.resolvedOutcome.toString()
+                            : "--",
+                      },
+                    ]
+                  : []),
               ].map((item) => (
                 <div key={item.label}>
                   <div
@@ -679,11 +600,39 @@ export default function MarketDetailPage({
                 </div>
               ))}
             </div>
+
+            {/* Etherscan link */}
+            {resolvedAddress && (
+              <div style={{ marginTop: "16px" }}>
+                <a
+                  href={`https://sepolia.etherscan.io/address/${resolvedAddress}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-sm btn-ghost"
+                  style={{
+                    fontSize: "var(--text-xs)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <IconExternal size={12} />
+                  View on Etherscan
+                </a>
+              </div>
+            )}
           </div>
 
-          {/* Activity table */}
-          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            <div style={{ padding: "20px 20px 0" }}>
+          {/* Activity placeholder */}
+          <div className="card" style={{ padding: "20px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                marginBottom: "16px",
+              }}
+            >
               <span
                 style={{
                   fontSize: "var(--text-sm)",
@@ -694,64 +643,36 @@ export default function MarketDetailPage({
                 Recent Activity
               </span>
             </div>
-            <table className="table" style={{ marginTop: "12px" }}>
-              <thead>
-                <tr>
-                  <th>Side</th>
-                  <th>Bettor</th>
-                  <th>Amount</th>
-                  <th>Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ACTIVITY.map((a, i) => (
-                  <tr key={i}>
-                    <td>
-                      <span
-                        className={`pill ${a.side === "YES" ? "pill-yes" : "pill-no"}`}
-                      >
-                        {a.side}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="mono" style={{ fontSize: "var(--text-sm)" }}>
-                        {a.bettor}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          color: "var(--color-privacy-text)",
-                          fontSize: "var(--text-sm)",
-                        }}
-                      >
-                        <LockIcon size={12} />
-                        <span
-                          className="mono"
-                          style={{ letterSpacing: "0.12em" }}
-                        >
-                          {"\u2022\u2022\u2022\u2022\u2022"}
-                        </span>
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className="mono"
-                        style={{
-                          fontSize: "var(--text-xs)",
-                          color: "var(--color-text-tertiary)",
-                        }}
-                      >
-                        {a.time}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                padding: "24px 16px",
+                background: "var(--color-bg-input)",
+                borderRadius: "var(--radius-md)",
+                color: "var(--color-text-tertiary)",
+                fontSize: "var(--text-sm)",
+              }}
+            >
+              <IconInfo size={16} stroke="var(--color-text-tertiary)" />
+              <div>
+                <p style={{ marginBottom: "4px" }}>
+                  Activity data loads from on-chain BetPlaced events.
+                </p>
+                <p
+                  className="mono"
+                  style={{
+                    fontSize: "var(--text-xs)",
+                    color: "var(--color-text-tertiary)",
+                  }}
+                >
+                  Event indexing requires a subgraph or dedicated indexer.
+                  Individual bet amounts are FHE-encrypted and shown as
+                  &bull;&bull;&bull;&bull;&bull;
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -771,422 +692,752 @@ export default function MarketDetailPage({
                 className="display"
                 style={{ fontSize: "var(--text-md)", fontWeight: 700 }}
               >
-                Place bet
+                {isMarketResolved
+                  ? "Market resolved"
+                  : isMarketCancelled
+                    ? "Market cancelled"
+                    : "Place bet"}
               </span>
               <FHEBadge />
             </div>
 
-            {/* YES / NO side buttons */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "10px",
-                marginBottom: "20px",
-              }}
-            >
-              <button
-                className={`side-btn${side === "YES" ? " side-btn--yes-active" : ""}`}
-                onClick={() => setSide("YES")}
-                type="button"
-              >
-                <div
-                  style={{
-                    fontSize: "var(--text-base)",
-                    fontWeight: 700,
-                    color:
-                      side === "YES"
-                        ? "var(--color-yes-text)"
-                        : "var(--color-text-primary)",
-                  }}
-                >
-                  YES
-                </div>
-                <div
-                  className="mono"
-                  style={{
-                    fontSize: "var(--text-xs)",
-                    color: "var(--color-text-tertiary)",
-                  }}
-                >
-                  {yesPct}% &middot; {yesPct > 0 ? (100 / yesPct).toFixed(1) : "0.0"}x
-                </div>
-              </button>
-              <button
-                className={`side-btn${side === "NO" ? " side-btn--no-active" : ""}`}
-                onClick={() => setSide("NO")}
-                type="button"
-              >
-                <div
-                  style={{
-                    fontSize: "var(--text-base)",
-                    fontWeight: 700,
-                    color:
-                      side === "NO"
-                        ? "var(--color-no-text)"
-                        : "var(--color-text-primary)",
-                  }}
-                >
-                  NO
-                </div>
-                <div
-                  className="mono"
-                  style={{
-                    fontSize: "var(--text-xs)",
-                    color: "var(--color-text-tertiary)",
-                  }}
-                >
-                  {noPct}% &middot; {noPct > 0 ? (100 / noPct).toFixed(1) : "0.0"}x
-                </div>
-              </button>
-            </div>
-
-            {/* Amount input */}
-            <div style={{ marginBottom: "12px" }}>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "var(--text-xs)",
-                  fontFamily: "var(--font-mono)",
-                  color: "var(--color-text-tertiary)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  marginBottom: "6px",
-                }}
-              >
-                Amount
-              </label>
-              <div style={{ position: "relative" }}>
-                <input
-                  className="input input-mono"
-                  type="text"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  style={{ paddingRight: "60px" }}
-                />
-                <span
-                  className="mono"
-                  style={{
-                    position: "absolute",
-                    right: "14px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    fontSize: "var(--text-xs)",
-                    color: "var(--color-text-tertiary)",
-                  }}
-                >
-                  cUSDT
-                </span>
-              </div>
-            </div>
-
-            {/* Quick amount chips */}
-            <div
-              style={{
-                display: "flex",
-                gap: "6px",
-                marginBottom: "20px",
-              }}
-            >
-              {quickAmounts.map((qa) => (
-                <button
-                  key={qa}
-                  className={`chip${amount === String(qa) ? " chip--active" : ""}`}
-                  onClick={() => setAmount(String(qa))}
-                  type="button"
-                  style={{ flex: 1, textAlign: "center", fontSize: "12px" }}
-                >
-                  {qa}
-                </button>
-              ))}
-            </div>
-
-            {/* Payout breakdown */}
-            <div
-              style={{
-                background: "var(--color-bg-input)",
-                borderRadius: "var(--radius-md)",
-                padding: "16px",
-                marginBottom: "20px",
-              }}
-            >
+            {/* ── Not connected state ─────────────────────────── */}
+            {!isConnected && (
               <div
                 style={{
                   display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "8px",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "var(--text-sm)",
-                    color: "var(--color-text-tertiary)",
-                  }}
-                >
-                  Stake
-                </span>
-                <span
-                  className="mono"
-                  style={{ fontSize: "var(--text-sm)" }}
-                >
-                  {amountNum.toLocaleString()} cUSDT
-                </span>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "12px",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "var(--text-sm)",
-                    color: "var(--color-text-tertiary)",
-                  }}
-                >
-                  Odds multiplier
-                </span>
-                <span
-                  className="mono"
-                  style={{ fontSize: "var(--text-sm)" }}
-                >
-                  {multiplier}x
-                </span>
-              </div>
-              <div
-                style={{
-                  height: "1px",
-                  background: "var(--color-border-subtle)",
-                  marginBottom: "12px",
-                }}
-              />
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "6px",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "var(--text-sm)",
-                    fontWeight: 600,
-                    color: "var(--color-text-secondary)",
-                  }}
-                >
-                  Payout if correct
-                </span>
-                <span
-                  className="mono"
-                  style={{
-                    fontSize: "var(--text-sm)",
-                    fontWeight: 600,
-                  }}
-                >
-                  {parseFloat(payout).toLocaleString()} cUSDT
-                </span>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "var(--text-sm)",
-                    color: "var(--color-text-tertiary)",
-                  }}
-                >
-                  Profit
-                </span>
-                <span
-                  className="mono"
-                  style={{
-                    fontSize: "var(--text-sm)",
-                    color:
-                      side === "YES"
-                        ? "var(--color-yes-text)"
-                        : "var(--color-no-text)",
-                    fontWeight: 600,
-                  }}
-                >
-                  +{parseFloat(profit).toLocaleString()} cUSDT
-                </span>
-              </div>
-            </div>
-
-            {/* Submit button */}
-            <button
-              className={`btn btn-lg ${side === "YES" ? "btn-yes" : "btn-no"}`}
-              onClick={handlePlaceBet}
-              type="button"
-              style={{
-                width: "100%",
-                marginBottom: "16px",
-                fontSize: "14px",
-              }}
-            >
-              <LockIcon
-                size={14}
-                stroke={
-                  side === "YES"
-                    ? "var(--color-yes-text)"
-                    : "var(--color-no-text)"
-                }
-              />
-              Encrypt & Bet {side} &middot; {amountNum}
-            </button>
-
-            {/* Privacy notice */}
-            <div
-              style={{
-                background: "var(--color-yes-muted)",
-                borderRadius: "var(--radius-md)",
-                padding: "12px 14px",
-                display: betPlaced ? "block" : "none",
-                marginBottom: "16px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
+                  flexDirection: "column",
                   alignItems: "center",
-                  gap: "8px",
-                  fontSize: "var(--text-sm)",
-                  color: "var(--color-yes-text)",
-                  fontWeight: 600,
-                  marginBottom: "4px",
+                  gap: "12px",
+                  padding: "32px 16px",
+                  textAlign: "center",
                 }}
               >
-                <IconCheck size={14} stroke="var(--color-yes-text)" />
-                Bet placed successfully
-              </div>
-              <p
-                style={{
-                  fontSize: "var(--text-xs)",
-                  color: "var(--color-text-tertiary)",
-                  lineHeight: "var(--leading-normal)",
-                }}
-              >
-                Your {side} position of {amountNum} cUSDT has been encrypted and
-                recorded on-chain.
-              </p>
-            </div>
-
-            <div
-              style={{
-                background: "var(--color-privacy-muted)",
-                borderRadius: "var(--radius-md)",
-                padding: "12px 14px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: "8px",
-                }}
-              >
-                <LockIcon
-                  size={13}
-                  stroke="var(--color-privacy-text)"
-                  style={{ marginTop: "2px", flexShrink: 0 }}
+                <IconWallet
+                  size={32}
+                  stroke="var(--color-text-tertiary)"
                 />
                 <p
                   style={{
-                    fontSize: "var(--text-xs)",
-                    color: "var(--color-privacy-text)",
-                    lineHeight: "var(--leading-normal)",
+                    fontSize: "var(--text-sm)",
+                    color: "var(--color-text-tertiary)",
                   }}
                 >
-                  Your amount is encrypted client-side using FHE before
-                  submission. No one -- not even the contract owner -- can see
-                  individual bet amounts. Only aggregate pool totals are
-                  publicly decryptable.
+                  Connect your wallet to place bets on this market.
                 </p>
               </div>
-            </div>
+            )}
 
-            {/* Your position (shown if bet placed) */}
-            {betPlaced && (
+            {/* ── Resolved state: show outcome + claim ────────── */}
+            {isConnected && isMarketResolved && (
+              <div>
+                <div
+                  style={{
+                    background: "var(--color-bg-input)",
+                    borderRadius: "var(--radius-md)",
+                    padding: "20px",
+                    textAlign: "center",
+                    marginBottom: "20px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "var(--text-xs)",
+                      fontFamily: "var(--font-mono)",
+                      color: "var(--color-text-tertiary)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    Resolved Outcome
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "var(--text-xl)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {market.resolvedOutcome === BigInt(1)
+                      ? "YES"
+                      : market.resolvedOutcome === BigInt(0)
+                        ? "NO"
+                        : market.resolvedOutcome?.toString() ?? "--"}
+                  </div>
+                </div>
+
+                {hasPosition && !hasClaimed && (
+                  <button
+                    className="btn btn-lg btn-yes"
+                    onClick={handleClaim}
+                    disabled={claim.isWriting || claim.isConfirming}
+                    type="button"
+                    style={{ width: "100%", marginBottom: "12px" }}
+                  >
+                    {claim.isWriting
+                      ? "Submitting..."
+                      : claim.isConfirming
+                        ? "Confirming..."
+                        : claim.isConfirmed
+                          ? "Claimed!"
+                          : "Claim Winnings"}
+                  </button>
+                )}
+
+                {hasClaimed && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      justifyContent: "center",
+                      padding: "12px",
+                      fontSize: "var(--text-sm)",
+                      color: "var(--color-yes-text)",
+                    }}
+                  >
+                    <IconCheck size={14} stroke="var(--color-yes-text)" />
+                    Winnings already claimed
+                  </div>
+                )}
+
+                {!hasPosition && (
+                  <p
+                    style={{
+                      textAlign: "center",
+                      fontSize: "var(--text-sm)",
+                      color: "var(--color-text-tertiary)",
+                      padding: "12px",
+                    }}
+                  >
+                    You have no position in this market.
+                  </p>
+                )}
+
+                {claim.error && (
+                  <p
+                    style={{
+                      fontSize: "var(--text-xs)",
+                      color: "var(--color-no-text)",
+                      marginTop: "8px",
+                      fontFamily: "var(--font-mono)",
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    Error: {claim.error.message}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* ── Cancelled state ─────────────────────────────── */}
+            {isConnected && isMarketCancelled && (
               <div
                 style={{
-                  marginTop: "20px",
-                  borderTop: "1px solid var(--color-border-subtle)",
-                  paddingTop: "20px",
+                  textAlign: "center",
+                  padding: "24px 16px",
+                  color: "var(--color-text-tertiary)",
+                  fontSize: "var(--text-sm)",
                 }}
               >
+                This market has been cancelled. No bets can be placed.
+              </div>
+            )}
+
+            {/* ── Betting UI (only when OPEN and connected) ───── */}
+            {isConnected && isMarketOpen && (
+              <>
+                {/* YES / NO side buttons */}
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginBottom: "14px",
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "10px",
+                    marginBottom: "20px",
                   }}
                 >
-                  <span
-                    style={{
-                      fontSize: "var(--text-sm)",
-                      fontWeight: 600,
-                      color: "var(--color-text-secondary)",
-                    }}
+                  <button
+                    className={`side-btn${side === "YES" ? " side-btn--yes-active" : ""}`}
+                    onClick={() => setSide("YES")}
+                    type="button"
                   >
-                    Your position
-                  </span>
-                  <span
-                    className={`pill ${side === "YES" ? "pill-yes" : "pill-no"}`}
+                    <div
+                      style={{
+                        fontSize: "var(--text-base)",
+                        fontWeight: 700,
+                        color:
+                          side === "YES"
+                            ? "var(--color-yes-text)"
+                            : "var(--color-text-primary)",
+                      }}
+                    >
+                      YES
+                    </div>
+                    <div
+                      className="mono"
+                      style={{
+                        fontSize: "var(--text-xs)",
+                        color: "var(--color-text-tertiary)",
+                      }}
+                    >
+                      {yesPct}% &middot;{" "}
+                      {yesPct > 0 ? (100 / yesPct).toFixed(1) : "0.0"}x
+                    </div>
+                  </button>
+                  <button
+                    className={`side-btn${side === "NO" ? " side-btn--no-active" : ""}`}
+                    onClick={() => setSide("NO")}
+                    type="button"
                   >
-                    {side}
-                  </span>
+                    <div
+                      style={{
+                        fontSize: "var(--text-base)",
+                        fontWeight: 700,
+                        color:
+                          side === "NO"
+                            ? "var(--color-no-text)"
+                            : "var(--color-text-primary)",
+                      }}
+                    >
+                      NO
+                    </div>
+                    <div
+                      className="mono"
+                      style={{
+                        fontSize: "var(--text-xs)",
+                        color: "var(--color-text-tertiary)",
+                      }}
+                    >
+                      {noPct}% &middot;{" "}
+                      {noPct > 0 ? (100 / noPct).toFixed(1) : "0.0"}x
+                    </div>
+                  </button>
                 </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <span
+
+                {/* Amount input */}
+                <div style={{ marginBottom: "12px" }}>
+                  <label
                     style={{
+                      display: "block",
                       fontSize: "var(--text-xs)",
+                      fontFamily: "var(--font-mono)",
                       color: "var(--color-text-tertiary)",
-                    }}
-                  >
-                    Entry odds
-                  </span>
-                  <span
-                    className="mono"
-                    style={{ fontSize: "var(--text-sm)" }}
-                  >
-                    {selectedPct}%
-                  </span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--color-text-tertiary)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      marginBottom: "6px",
                     }}
                   >
                     Amount
-                  </span>
-                  <EncryptedValue
-                    value={amountNum}
-                    revealed={positionRevealed}
-                    onReveal={() => setPositionRevealed(true)}
-                    size="sm"
-                  />
+                    {minimumBetCUSDT > 0 && (
+                      <span style={{ textTransform: "none", marginLeft: "8px" }}>
+                        (min: {minimumBetCUSDT} cUSDT)
+                      </span>
+                    )}
+                  </label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      className="input input-mono"
+                      type="text"
+                      value={amount}
+                      onChange={(e) => {
+                        setAmount(e.target.value);
+                        if (betStep !== "idle") setBetStep("idle");
+                      }}
+                      style={{
+                        paddingRight: "60px",
+                        ...(isAmountBelowMin
+                          ? {
+                              borderColor: "var(--color-no-text)",
+                            }
+                          : {}),
+                      }}
+                    />
+                    <span
+                      className="mono"
+                      style={{
+                        position: "absolute",
+                        right: "14px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        fontSize: "var(--text-xs)",
+                        color: "var(--color-text-tertiary)",
+                      }}
+                    >
+                      cUSDT
+                    </span>
+                  </div>
+                  {isAmountBelowMin && (
+                    <p
+                      style={{
+                        fontSize: "var(--text-xs)",
+                        color: "var(--color-no-text)",
+                        marginTop: "4px",
+                      }}
+                    >
+                      Minimum bet is {minimumBetCUSDT} cUSDT
+                    </p>
+                  )}
                 </div>
-              </div>
+
+                {/* Quick amount chips */}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "6px",
+                    marginBottom: "20px",
+                  }}
+                >
+                  {quickAmounts.map((qa) => (
+                    <button
+                      key={qa}
+                      className={`chip${amount === String(qa) ? " chip--active" : ""}`}
+                      onClick={() => {
+                        setAmount(String(qa));
+                        if (betStep !== "idle") setBetStep("idle");
+                      }}
+                      type="button"
+                      style={{
+                        flex: 1,
+                        textAlign: "center",
+                        fontSize: "12px",
+                      }}
+                    >
+                      {qa}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Payout breakdown */}
+                <div
+                  style={{
+                    background: "var(--color-bg-input)",
+                    borderRadius: "var(--radius-md)",
+                    padding: "16px",
+                    marginBottom: "20px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "var(--text-sm)",
+                        color: "var(--color-text-tertiary)",
+                      }}
+                    >
+                      Stake
+                    </span>
+                    <span
+                      className="mono"
+                      style={{ fontSize: "var(--text-sm)" }}
+                    >
+                      {amountNum.toLocaleString()} cUSDT
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginBottom: "12px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "var(--text-sm)",
+                        color: "var(--color-text-tertiary)",
+                      }}
+                    >
+                      Odds multiplier
+                    </span>
+                    <span
+                      className="mono"
+                      style={{ fontSize: "var(--text-sm)" }}
+                    >
+                      {multiplier}x
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      height: "1px",
+                      background: "var(--color-border-subtle)",
+                      marginBottom: "12px",
+                    }}
+                  />
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "var(--text-sm)",
+                        fontWeight: 600,
+                        color: "var(--color-text-secondary)",
+                      }}
+                    >
+                      Payout if correct
+                    </span>
+                    <span
+                      className="mono"
+                      style={{
+                        fontSize: "var(--text-sm)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {parseFloat(payout).toLocaleString()} cUSDT
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "var(--text-sm)",
+                        color: "var(--color-text-tertiary)",
+                      }}
+                    >
+                      Profit
+                    </span>
+                    <span
+                      className="mono"
+                      style={{
+                        fontSize: "var(--text-sm)",
+                        color:
+                          side === "YES"
+                            ? "var(--color-yes-text)"
+                            : "var(--color-no-text)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      +{parseFloat(profit).toLocaleString()} cUSDT
+                    </span>
+                  </div>
+                </div>
+
+                {/* Submit button */}
+                <button
+                  className={`btn btn-lg ${side === "YES" ? "btn-yes" : "btn-no"}`}
+                  onClick={handlePlaceBet}
+                  disabled={
+                    betStep !== "idle" ||
+                    amountNum <= 0 ||
+                    isAmountBelowMin ||
+                    isBetWriting ||
+                    isBetConfirming
+                  }
+                  type="button"
+                  style={{
+                    width: "100%",
+                    marginBottom: "16px",
+                    fontSize: "14px",
+                  }}
+                >
+                  {betStep === "encrypting" ? (
+                    <>
+                      <LockIcon
+                        size={14}
+                        stroke="var(--color-text-tertiary)"
+                      />
+                      Encrypting...
+                    </>
+                  ) : isBetWriting ? (
+                    "Submitting tx..."
+                  ) : isBetConfirming ? (
+                    "Confirming..."
+                  ) : (
+                    <>
+                      <LockIcon
+                        size={14}
+                        stroke={
+                          side === "YES"
+                            ? "var(--color-yes-text)"
+                            : "var(--color-no-text)"
+                        }
+                      />
+                      Encrypt & Bet {side} &middot; {amountNum}
+                    </>
+                  )}
+                </button>
+
+                {/* Bet step feedback */}
+                {betStep === "needs-sdk" && (
+                  <div
+                    style={{
+                      background: "var(--color-bg-input)",
+                      borderRadius: "var(--radius-md)",
+                      padding: "14px",
+                      marginBottom: "16px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        fontSize: "var(--text-sm)",
+                        fontWeight: 600,
+                        color: "var(--color-text-secondary)",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      <IconInfo
+                        size={14}
+                        stroke="var(--color-text-secondary)"
+                      />
+                      FHEVM SDK Required
+                    </div>
+                    <p
+                      style={{
+                        fontSize: "var(--text-xs)",
+                        color: "var(--color-text-tertiary)",
+                        lineHeight: "var(--leading-normal)",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      Real bet placement requires the FHEVM SDK to encrypt
+                      your bet amount client-side before submission. The SDK
+                      connects to the Zama gateway to produce encrypted
+                      inputs (externalEuint64 + inputProof).
+                    </p>
+                    <button
+                      className="btn btn-sm btn-secondary"
+                      onClick={() => setBetStep("idle")}
+                      type="button"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+
+                {betStep === "confirmed" && (
+                  <div
+                    style={{
+                      background: "var(--color-yes-muted)",
+                      borderRadius: "var(--radius-md)",
+                      padding: "12px 14px",
+                      marginBottom: "16px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        fontSize: "var(--text-sm)",
+                        color: "var(--color-yes-text)",
+                        fontWeight: 600,
+                        marginBottom: "4px",
+                      }}
+                    >
+                      <IconCheck
+                        size={14}
+                        stroke="var(--color-yes-text)"
+                      />
+                      Bet placed successfully
+                    </div>
+                    <p
+                      style={{
+                        fontSize: "var(--text-xs)",
+                        color: "var(--color-text-tertiary)",
+                        lineHeight: "var(--leading-normal)",
+                      }}
+                    >
+                      Your {side} position of {amountNum} cUSDT has been
+                      encrypted and recorded on-chain.
+                    </p>
+                  </div>
+                )}
+
+                {bet.error && (
+                  <div
+                    style={{
+                      background: "var(--color-no-muted)",
+                      borderRadius: "var(--radius-md)",
+                      padding: "12px 14px",
+                      marginBottom: "16px",
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontSize: "var(--text-xs)",
+                        color: "var(--color-no-text)",
+                        fontFamily: "var(--font-mono)",
+                        wordBreak: "break-all",
+                      }}
+                    >
+                      Error: {bet.error.message}
+                    </p>
+                  </div>
+                )}
+
+                {/* Privacy notice */}
+                <div
+                  style={{
+                    background: "var(--color-privacy-muted)",
+                    borderRadius: "var(--radius-md)",
+                    padding: "12px 14px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "8px",
+                    }}
+                  >
+                    <LockIcon
+                      size={13}
+                      stroke="var(--color-privacy-text)"
+                      style={{ marginTop: "2px", flexShrink: 0 }}
+                    />
+                    <p
+                      style={{
+                        fontSize: "var(--text-xs)",
+                        color: "var(--color-privacy-text)",
+                        lineHeight: "var(--leading-normal)",
+                      }}
+                    >
+                      Your amount is encrypted client-side using FHE before
+                      submission. No one -- not even the contract owner -- can
+                      see individual bet amounts. Only aggregate pool totals
+                      are publicly decryptable.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Position section */}
+                {(hasPosition || localPosition) && (
+                  <div
+                    style={{
+                      marginTop: "20px",
+                      borderTop: "1px solid var(--color-border-subtle)",
+                      paddingTop: "20px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: "14px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "var(--text-sm)",
+                          fontWeight: 600,
+                          color: "var(--color-text-secondary)",
+                        }}
+                      >
+                        Your position
+                      </span>
+                      {localPosition && (
+                        <span
+                          className={`pill ${localPosition.side === "YES" ? "pill-yes" : "pill-no"}`}
+                        >
+                          {localPosition.side}
+                        </span>
+                      )}
+                    </div>
+                    {localPosition && (
+                      <>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginBottom: "8px",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: "var(--text-xs)",
+                              color: "var(--color-text-tertiary)",
+                            }}
+                          >
+                            Entry odds
+                          </span>
+                          <span
+                            className="mono"
+                            style={{ fontSize: "var(--text-sm)" }}
+                          >
+                            {localPosition.entryOdds}%
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: "var(--text-xs)",
+                              color: "var(--color-text-tertiary)",
+                            }}
+                          >
+                            Amount
+                          </span>
+                          <EncryptedValue
+                            value={localPosition.amount}
+                            revealed={localPosition.revealed || positionRevealed}
+                            onReveal={() => setPositionRevealed(true)}
+                            size="sm"
+                          />
+                        </div>
+                      </>
+                    )}
+                    {!localPosition && hasPosition && (
+                      <p
+                        style={{
+                          fontSize: "var(--text-xs)",
+                          color: "var(--color-text-tertiary)",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
+                        <LockIcon size={12} />
+                        You have an encrypted position in this market.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
             )}
+
+            {/* Non-open, non-resolved, non-cancelled states (EXPIRED / RESOLVING) */}
+            {isConnected &&
+              !isMarketOpen &&
+              !isMarketResolved &&
+              !isMarketCancelled && (
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "24px 16px",
+                    color: "var(--color-text-tertiary)",
+                    fontSize: "var(--text-sm)",
+                  }}
+                >
+                  <p style={{ marginBottom: "8px" }}>
+                    This market is{" "}
+                    <strong>
+                      {STATUS_LABELS[market.status ?? 0]?.toLowerCase()}
+                    </strong>
+                    .
+                  </p>
+                  <p>Betting is no longer available.</p>
+                </div>
+              )}
           </div>
         </div>
       </div>

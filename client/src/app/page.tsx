@@ -601,7 +601,7 @@ export default function LandingPage() {
                 color: "var(--color-text-tertiary)",
               }}
             >
-              v0.1.0 &middot; Sepolia testnet
+              Sepolia testnet
             </span>
           </div>
 
@@ -649,7 +649,7 @@ export default function LandingPage() {
 
           {/* Right: built on badge */}
           <span className="pill pill-privacy">
-            Built on Zama fhEVM
+            Built on Zama
           </span>
         </div>
       </footer>

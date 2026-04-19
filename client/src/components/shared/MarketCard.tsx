@@ -1,38 +1,148 @@
 "use client";
 
+import { useMarket } from "@/hooks/useMarket";
 import { OddsBar } from "./OddsBar";
-import { Sparkline } from "./Sparkline";
-import { IconFlame, IconArrowUp, IconArrowDown, IconClock } from "./Icons";
+import { IconClock } from "./Icons";
 
-interface Market {
-  id: string;
-  q: string;
-  category: string;
-  yes: number;
-  no: number;
-  pool: number;
-  volume24h: number;
-  expiry: string;
-  bets: number;
-  trend: number;
-  hot: boolean;
-  history: number[];
-}
+const STATUS_LABELS: Record<number, string> = {
+  0: "Open",
+  1: "Expired",
+  2: "Resolving",
+  3: "Resolved",
+  4: "Cancelled",
+};
+
+const STATUS_PILL_CLASS: Record<number, string> = {
+  0: "pill pill-yes",
+  1: "pill pill-warning",
+  2: "pill pill-warning",
+  3: "pill",
+  4: "pill pill-no",
+};
 
 interface MarketCardProps {
-  market: Market;
-  onClick?: () => void;
+  address: `0x${string}`;
+  onClick: () => void;
 }
 
-export const MarketCard = ({ market, onClick }: MarketCardProps) => {
-  const trendUp = market.trend > 0;
-  const trendDown = market.trend < 0;
+const formatCUSDT = (value: number): string => {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 
-  const formatCompact = (n: number): string => {
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-    return n.toLocaleString();
-  };
+export const MarketCard = ({ address, onClick }: MarketCardProps) => {
+  const {
+    question,
+    status,
+    marketType,
+    expiryBlock,
+    totalPool,
+    yesOdds,
+    noOdds,
+    isLoading,
+  } = useMarket(address);
+
+  if (isLoading) {
+    return (
+      <div className="card market-card" style={{ minHeight: "180px" }}>
+        {/* Skeleton: top row */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "12px",
+          }}
+        >
+          <div
+            style={{
+              width: "60px",
+              height: "20px",
+              borderRadius: "6px",
+              background: "var(--color-border-subtle)",
+              animation: "pulse 1.5s ease-in-out infinite",
+            }}
+          />
+          <div
+            style={{
+              width: "80px",
+              height: "16px",
+              borderRadius: "4px",
+              background: "var(--color-border-subtle)",
+              animation: "pulse 1.5s ease-in-out infinite",
+            }}
+          />
+        </div>
+
+        {/* Skeleton: question */}
+        <div
+          style={{
+            width: "100%",
+            height: "18px",
+            borderRadius: "4px",
+            background: "var(--color-border-subtle)",
+            marginBottom: "8px",
+            animation: "pulse 1.5s ease-in-out infinite",
+          }}
+        />
+        <div
+          style={{
+            width: "60%",
+            height: "18px",
+            borderRadius: "4px",
+            background: "var(--color-border-subtle)",
+            marginBottom: "16px",
+            animation: "pulse 1.5s ease-in-out infinite",
+          }}
+        />
+
+        {/* Skeleton: odds bar */}
+        <div
+          style={{
+            width: "100%",
+            height: "24px",
+            borderRadius: "6px",
+            background: "var(--color-border-subtle)",
+            marginBottom: "16px",
+            animation: "pulse 1.5s ease-in-out infinite",
+          }}
+        />
+
+        {/* Skeleton: stats */}
+        <div
+          style={{
+            borderTop: "1px solid var(--color-border-subtle)",
+            paddingTop: "12px",
+            display: "flex",
+            gap: "16px",
+          }}
+        >
+          <div
+            style={{
+              width: "80px",
+              height: "14px",
+              borderRadius: "4px",
+              background: "var(--color-border-subtle)",
+              animation: "pulse 1.5s ease-in-out infinite",
+            }}
+          />
+          <div
+            style={{
+              width: "60px",
+              height: "14px",
+              borderRadius: "4px",
+              background: "var(--color-border-subtle)",
+              animation: "pulse 1.5s ease-in-out infinite",
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  const statusNum = typeof status === "number" ? status : 0;
+  const typeLabel = marketType === 1 ? "Scalar" : "Binary";
 
   return (
     <div
@@ -43,11 +153,11 @@ export const MarketCard = ({ market, onClick }: MarketCardProps) => {
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onClick?.();
+          onClick();
         }
       }}
     >
-      {/* Top row: category + expiry + hot/trend indicators */}
+      {/* Top row: status + type + expiry */}
       <div
         style={{
           display: "flex",
@@ -57,42 +167,24 @@ export const MarketCard = ({ market, onClick }: MarketCardProps) => {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span className="pill">{market.category}</span>
-          {market.hot && (
-            <span className="pill pill-warning">
-              <IconFlame size={11} stroke="var(--color-warning-text)" />
-              Hot
-            </span>
-          )}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          {(trendUp || trendDown) && (
-            <span
-              className={trendUp ? "pill pill-yes" : "pill pill-no"}
-              style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}
-            >
-              {trendUp ? (
-                <IconArrowUp size={10} stroke="var(--color-yes-text)" />
-              ) : (
-                <IconArrowDown size={10} stroke="var(--color-no-text)" />
-              )}
-              {Math.abs(market.trend)}%
-            </span>
-          )}
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              fontSize: "11px",
-              color: "var(--color-text-tertiary)",
-              fontFamily: "var(--font-mono)",
-            }}
-          >
-            <IconClock size={11} stroke="var(--color-text-tertiary)" />
-            {market.expiry}
+          <span className={STATUS_PILL_CLASS[statusNum] ?? "pill"}>
+            {STATUS_LABELS[statusNum] ?? "Unknown"}
           </span>
+          <span className="pill">{typeLabel}</span>
         </div>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+            fontSize: "11px",
+            color: "var(--color-text-tertiary)",
+            fontFamily: "var(--font-mono)",
+          }}
+        >
+          <IconClock size={11} stroke="var(--color-text-tertiary)" />
+          Block {expiryBlock ? expiryBlock.toString() : "---"}
+        </span>
       </div>
 
       {/* Question */}
@@ -105,15 +197,15 @@ export const MarketCard = ({ market, onClick }: MarketCardProps) => {
           letterSpacing: "-0.02em",
         }}
       >
-        {market.q}
+        {question ?? "Loading..."}
       </h3>
 
-      {/* Odds bar without meta */}
+      {/* Odds bar */}
       <div style={{ marginBottom: "16px" }}>
-        <OddsBar yes={market.yes} no={market.no} showMeta={false} />
+        <OddsBar yes={yesOdds} no={noOdds} showMeta={false} />
       </div>
 
-      {/* Stats row: pool, volume, bets, sparkline */}
+      {/* Stats row */}
       <div
         style={{
           display: "flex",
@@ -132,13 +224,8 @@ export const MarketCard = ({ market, onClick }: MarketCardProps) => {
             color: "var(--color-text-tertiary)",
           }}
         >
-          <span>Pool {formatCompact(market.pool)}</span>
-          <span>Vol {formatCompact(market.volume24h)}</span>
-          <span>{market.bets} bets</span>
+          <span>Pool {formatCUSDT(totalPool)} cUSDT</span>
         </div>
-        {market.history.length >= 2 && (
-          <Sparkline data={market.history} width={64} height={22} />
-        )}
       </div>
     </div>
   );
