@@ -19,7 +19,10 @@ import { EncryptedValue } from "@/components/shared/EncryptedValue";
 import { useMarket, useHasPosition } from "@/hooks/useMarket";
 import { usePlaceBet } from "@/hooks/usePlaceBet";
 import { useClaimWinnings } from "@/hooks/useClaimWinnings";
+import { useApproveCUSDT } from "@/hooks/useCUSDT";
+import { useFHEEncrypt } from "@/hooks/useFHEVM";
 import { nullCastFactoryConfig } from "@/lib/contracts";
+import { CONTRACT_ADDRESSES } from "@/constants/addresses";
 import { useNullCastStore } from "@/lib/store";
 
 /* ── Status helpers ──────────────────────────────────────────── */
@@ -58,33 +61,9 @@ function truncateAddress(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
-/* ── Encryption helper (FHEVM SDK placeholder) ───────────────── */
-
-/**
- * Placeholder for FHEVM client-side encryption.
- * In production, this would use @fhevm/sdk to:
- *   1. Initialize the FHEVM instance with the gateway URL
- *   2. Call instance.createEncryptedInput(contractAddress, userAddress)
- *   3. Add the uint64 amount via .add64(amountInBaseUnits)
- *   4. Encrypt and return { handle, inputProof }
- *
- * For the demo, we simulate the encryption UX flow but cannot produce
- * real encrypted inputs without the full FHEVM SDK gateway connection.
- */
-async function simulateFHEEncryption(
-  _amount: number // eslint-disable-line @typescript-eslint/no-unused-vars
-): Promise<{ encrypted: `0x${string}`; proof: `0x${string}` } | null> {
-  // Simulate encryption delay (real FHE encryption takes ~1-3s)
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-
-  // In production, this would return real encrypted handles from the FHEVM SDK.
-  // Returning null signals that real encryption is not available.
-  return null;
-}
-
 /* ── Bet flow step type ──────────────────────────────────────── */
 
-type BetStep = "idle" | "encrypting" | "needs-sdk" | "writing" | "confirming" | "confirmed" | "error";
+type BetStep = "idle" | "encrypting" | "approving" | "writing" | "confirming" | "confirmed" | "error";
 
 /* ── Main page ────────────────────────────────────────────────── */
 
@@ -144,12 +123,11 @@ export default function MarketDetailPage({
   });
 
   /* ── Betting hooks ──────────────────────────────────────────── */
-  const bet = usePlaceBet(
-    hasAddress ? resolvedAddress : ("0x0000000000000000000000000000000000000000" as `0x${string}`)
-  );
-  const claim = useClaimWinnings(
-    hasAddress ? resolvedAddress : ("0x0000000000000000000000000000000000000000" as `0x${string}`)
-  );
+  const zeroAddr = "0x0000000000000000000000000000000000000000" as `0x${string}`;
+  const bet = usePlaceBet(hasAddress ? resolvedAddress : zeroAddr);
+  const claim = useClaimWinnings(hasAddress ? resolvedAddress : zeroAddr);
+  const approveCUSDT = useApproveCUSDT();
+  const fhe = useFHEEncrypt();
 
   /* ── Zustand store ──────────────────────────────────────────── */
   const addPosition = useNullCastStore((s) => s.addPosition);
@@ -190,23 +168,37 @@ export default function MarketDetailPage({
 
   /* ── Bet handler ────────────────────────────────────────────── */
   const handlePlaceBet = useCallback(async () => {
-    if (!isConnected || !hasAddress || !isMarketOpen) return;
+    if (!isConnected || !hasAddress || !resolvedAddress || !isMarketOpen) return;
     if (amountNum <= 0 || isAmountBelowMin) return;
 
-    setBetStep("encrypting");
+    try {
+      // Step 1: Encrypt the amount using FHEVM SDK
+      setBetStep("encrypting");
+      const amountBaseUnits = BigInt(Math.round(amountNum * 1e6));
 
-    const encResult = await simulateFHEEncryption(amountNum);
+      const encResult = await fhe.encrypt(amountBaseUnits, resolvedAddress);
+      if (!encResult) {
+        setBetStep("error");
+        return;
+      }
 
-    if (!encResult) {
-      // Real FHE encryption not available -- show SDK notice
-      setBetStep("needs-sdk");
-      return;
+      // Step 2: Approve cUSDT spending (also needs encrypted amount)
+      setBetStep("approving");
+      const approveEnc = await fhe.encrypt(amountBaseUnits, CONTRACT_ADDRESSES.MockcUSDT as `0x${string}`);
+      if (!approveEnc) {
+        setBetStep("error");
+        return;
+      }
+      approveCUSDT.approve(resolvedAddress, approveEnc.handle, approveEnc.inputProof);
+
+      // Step 3: Place the bet
+      setBetStep("writing");
+      bet.placeBet(encResult.handle, encResult.inputProof, side === "YES");
+      setBetStep("confirming");
+    } catch {
+      setBetStep("error");
     }
-
-    // If real encryption were available, we would call:
-    // bet.placeBet(encResult.encrypted, encResult.proof, side === "YES");
-    // setBetStep("writing");
-  }, [isConnected, hasAddress, isMarketOpen, amountNum, isAmountBelowMin, side]);
+  }, [isConnected, hasAddress, resolvedAddress, isMarketOpen, amountNum, isAmountBelowMin, side, fhe, approveCUSDT, bet]);
 
   // Track bet confirmation from the write hook
   const isBetConfirmed = bet.isConfirmed;
@@ -1147,12 +1139,14 @@ export default function MarketDetailPage({
                         size={14}
                         stroke="var(--color-text-tertiary)"
                       />
-                      Encrypting...
+                      Encrypting via FHE...
                     </>
-                  ) : isBetWriting ? (
-                    "Submitting tx..."
+                  ) : betStep === "approving" ? (
+                    "Approving cUSDT..."
+                  ) : betStep === "writing" || isBetWriting ? (
+                    "Confirm in wallet..."
                   ) : isBetConfirming ? (
-                    "Confirming..."
+                    "Confirming on-chain..."
                   ) : (
                     <>
                       <LockIcon
@@ -1169,52 +1163,32 @@ export default function MarketDetailPage({
                 </button>
 
                 {/* Bet step feedback */}
-                {betStep === "needs-sdk" && (
+                {betStep === "error" && (
                   <div
                     style={{
-                      background: "var(--color-bg-input)",
+                      background: "var(--color-no-muted)",
                       borderRadius: "var(--radius-md)",
-                      padding: "14px",
+                      padding: "12px 14px",
                       marginBottom: "16px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
                     }}
                   >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        fontSize: "var(--text-sm)",
-                        fontWeight: 600,
-                        color: "var(--color-text-secondary)",
-                        marginBottom: "6px",
-                      }}
-                    >
-                      <IconInfo
-                        size={14}
-                        stroke="var(--color-text-secondary)"
-                      />
-                      FHEVM SDK Required
+                    <IconInfo size={14} stroke="var(--color-no-text)" />
+                    <div>
+                      <p style={{ fontSize: "var(--text-sm)", color: "var(--color-no-text)", fontWeight: 500 }}>
+                        {fhe.error || bet.error?.message || "Something went wrong"}
+                      </p>
+                      <button
+                        className="btn btn-sm btn-ghost"
+                        onClick={() => { setBetStep("idle"); fhe.reset(); }}
+                        type="button"
+                        style={{ marginTop: "6px", fontSize: "var(--text-xs)" }}
+                      >
+                        Try again
+                      </button>
                     </div>
-                    <p
-                      style={{
-                        fontSize: "var(--text-xs)",
-                        color: "var(--color-text-tertiary)",
-                        lineHeight: "var(--leading-normal)",
-                        marginBottom: "8px",
-                      }}
-                    >
-                      Real bet placement requires the FHEVM SDK to encrypt
-                      your bet amount client-side before submission. The SDK
-                      connects to the Zama gateway to produce encrypted
-                      inputs (externalEuint64 + inputProof).
-                    </p>
-                    <button
-                      className="btn btn-sm btn-secondary"
-                      onClick={() => setBetStep("idle")}
-                      type="button"
-                    >
-                      Dismiss
-                    </button>
                   </div>
                 )}
 
@@ -1306,10 +1280,9 @@ export default function MarketDetailPage({
                         lineHeight: "var(--leading-normal)",
                       }}
                     >
-                      Your amount is encrypted client-side using FHE before
-                      submission. No one -- not even the contract owner -- can
-                      see individual bet amounts. Only aggregate pool totals
-                      are publicly decryptable.
+                      Your bet is encrypted before it hits the chain. Nobody
+                      can see your position, not even the protocol. Only
+                      aggregate odds are public.
                     </p>
                   </div>
                 </div>
