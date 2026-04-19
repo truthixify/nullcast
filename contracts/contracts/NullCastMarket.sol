@@ -43,10 +43,14 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
     error AlreadyClaimed();
     error OddsAlreadyUpdatedThisBlock();
     error ZeroAddress();
+    error NotScalarMarket();
+    error NotBinaryMarket();
+    error InvalidBucketId(uint8 bucketId, uint8 bucketCount);
 
     // ── Events ─────────────────────────────────────────────────────────────
 
     event BetPlaced(address indexed bettor, uint256 indexed marketId, bool isYes);
+    event BucketBetPlaced(address indexed bettor, uint256 indexed marketId, uint8 bucketId);
     event OddsUpdated(uint256 indexed marketId, uint256 yesPool, uint256 noPool, uint256 blockNumber);
     event MarketResolved(uint256 indexed marketId, uint256 outcome, uint256 blockNumber);
     event WinningsClaimed(address indexed winner, uint256 indexed marketId);
@@ -68,6 +72,13 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
     /// @dev Encrypted: individual payout amounts — owner-only decrypt
     mapping(address => euint64) private _userWinnings;
 
+    // ── Scalar Market Encrypted State ──────────────────────────────────────
+
+    /// @dev Encrypted: per-bucket pool totals (bucketId => encrypted pool)
+    mapping(uint8 => euint64) private _bucketPools;
+    /// @dev Encrypted: per-user per-bucket positions
+    mapping(address => mapping(uint8 => euint64)) private _userBucketPositions;
+
     /// @dev Tracks whether a user has already claimed winnings
     mapping(address => bool) private _hasClaimed;
 
@@ -88,8 +99,13 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
     uint256 public publicYesPool;
     uint256 public publicNoPool;
 
+    /// @dev Publicly revealed bucket pool totals (scalar markets)
+    mapping(uint8 => uint256) public publicBucketPools;
+    /// @dev Number of buckets for scalar markets
+    uint8 public bucketCount;
+
     /// @dev Resolution state
-    uint256 public resolvedOutcome; // 0 = NO, 1 = YES
+    uint256 public resolvedOutcome; // 0 = NO/bucket0, 1 = YES/bucket1, etc.
     address public oracle;
     address public owner;
     address public factory;
@@ -129,6 +145,16 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
         _;
     }
 
+    modifier onlyBinary() {
+        if (marketType != MarketType.BINARY) revert NotBinaryMarket();
+        _;
+    }
+
+    modifier onlyScalar() {
+        if (marketType != MarketType.SCALAR) revert NotScalarMarket();
+        _;
+    }
+
     // ── Constructor ────────────────────────────────────────────────────────
 
     /**
@@ -141,6 +167,16 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
      * @param _owner Address with pause/cancel authority
      * @param _cUSDT Address of the confidential USDT contract
      */
+    /**
+     * @param _marketId Unique identifier assigned by the factory
+     * @param _question Human-readable market question
+     * @param _expiryBlock Block number after which no new bets are accepted
+     * @param _minimumBet Minimum bet amount in cUSDT base units (6 decimals)
+     * @param _oracle Address authorized to resolve this market
+     * @param _owner Address with pause/cancel authority
+     * @param _cUSDT Address of the confidential USDT contract
+     * @param _bucketCount Number of buckets for scalar markets (0 = binary)
+     */
     constructor(
         uint256 _marketId,
         string memory _question,
@@ -148,7 +184,8 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
         uint256 _minimumBet,
         address _oracle,
         address _owner,
-        address _cUSDT
+        address _cUSDT,
+        uint8 _bucketCount
     ) {
         if (_oracle == address(0)) revert ZeroAddress();
         if (_owner == address(0)) revert ZeroAddress();
@@ -156,7 +193,6 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
 
         marketId = _marketId;
         question = _question;
-        marketType = MarketType.BINARY;
         status = MarketStatus.OPEN;
         expiryBlock = _expiryBlock;
         minimumBet = _minimumBet;
@@ -164,6 +200,13 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
         owner = _owner;
         factory = msg.sender;
         cUSDT = IConfidentialERC20(_cUSDT);
+
+        if (_bucketCount > 0) {
+            marketType = MarketType.SCALAR;
+            bucketCount = _bucketCount;
+        } else {
+            marketType = MarketType.BINARY;
+        }
     }
 
     // ── Core Functions ─────────────────────────────────────────────────────
@@ -258,6 +301,60 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
     }
 
     /**
+     * @notice Place an encrypted scalar bet on a specific bucket
+     * @param encryptedAmount Encrypted bet amount (externalEuint64 handle)
+     * @param inputProof Proof that the encrypted input is valid
+     * @param bucketId Bucket index to bet on (0 to bucketCount-1)
+     */
+    function placeBucketBet(
+        externalEuint64 encryptedAmount,
+        bytes calldata inputProof,
+        uint8 bucketId
+    ) external whenNotPaused onlyOpen onlyScalar nonReentrant {
+        if (bucketId >= bucketCount) revert InvalidBucketId(bucketId, bucketCount);
+
+        if (block.number >= expiryBlock) {
+            status = MarketStatus.EXPIRED;
+            emit MarketExpired(marketId, block.number);
+            revert MarketNotOpen(MarketStatus.EXPIRED);
+        }
+
+        euint64 amount = FHE.fromExternal(encryptedAmount, inputProof);
+
+        // Encrypted: enforce minimum bet
+        ebool meetsMinimum = FHE.ge(amount, FHE.asEuint64(uint64(minimumBet)));
+        euint64 validAmount = FHE.select(meetsMinimum, amount, FHE.asEuint64(uint64(0)));
+
+        FHE.allowTransient(validAmount, address(cUSDT));
+        cUSDT.transferFrom(msg.sender, address(this), validAmount);
+
+        _hasPosition[msg.sender] = true;
+
+        // Encrypted: update user's bucket position
+        if (FHE.isInitialized(_userBucketPositions[msg.sender][bucketId])) {
+            _userBucketPositions[msg.sender][bucketId] = FHE.add(
+                _userBucketPositions[msg.sender][bucketId],
+                validAmount
+            );
+        } else {
+            _userBucketPositions[msg.sender][bucketId] = validAmount;
+        }
+        FHE.allowThis(_userBucketPositions[msg.sender][bucketId]);
+        FHE.allow(_userBucketPositions[msg.sender][bucketId], msg.sender);
+
+        // Encrypted: update bucket pool total
+        if (FHE.isInitialized(_bucketPools[bucketId])) {
+            _bucketPools[bucketId] = FHE.add(_bucketPools[bucketId], validAmount);
+        } else {
+            _bucketPools[bucketId] = validAmount;
+        }
+        FHE.allowThis(_bucketPools[bucketId]);
+        FHE.makePubliclyDecryptable(_bucketPools[bucketId]);
+
+        emit BucketBetPlaced(msg.sender, marketId, bucketId);
+    }
+
+    /**
      * @notice Submit publicly decrypted odds back on-chain
      * @dev Called by frontend/keeper after off-chain decryption via Zama KMS.
      *      Verifies the decryption proof before storing plaintext pool values.
@@ -311,35 +408,13 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
 
         _hasClaimed[msg.sender] = true;
 
-        // Determine which pool the user bet on and which pool won
-        euint64 userPosition;
-        if (resolvedOutcome == 1) {
-            userPosition = _userYesPositions[msg.sender];
+        euint64 netWinnings;
+
+        if (marketType == MarketType.BINARY) {
+            netWinnings = _claimBinaryWinnings();
         } else {
-            userPosition = _userNoPositions[msg.sender];
+            netWinnings = _claimScalarWinnings();
         }
-
-        // If user has no position on the winning side, nothing to claim
-        if (!FHE.isInitialized(userPosition)) revert NoPosition();
-
-        euint64 totalPool = FHE.add(_totalYesPool, _totalNoPool);
-
-        // Encrypted: compute share = (userPosition * totalPool) / totalWinnerPool
-        // Division by encrypted value not supported — we use publicized pool totals
-        // which have been verified via checkSignatures
-        uint64 winnerPoolClear = resolvedOutcome == 1
-            ? uint64(publicYesPool)
-            : uint64(publicNoPool);
-
-        // Guard against zero division
-        if (winnerPoolClear == 0) revert NoPosition();
-
-        euint64 numerator = FHE.mul(userPosition, totalPool);
-        euint64 grossWinnings = FHE.div(numerator, winnerPoolClear);
-
-        // Deduct 2% LP fee: fee = grossWinnings / 50
-        euint64 fee = FHE.div(grossWinnings, uint64(50));
-        euint64 netWinnings = FHE.sub(grossWinnings, fee);
 
         // Store winnings and grant user decrypt permission
         _userWinnings[msg.sender] = netWinnings;
@@ -445,6 +520,20 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
         return _hasClaimed[user];
     }
 
+    /**
+     * @notice Get the encrypted handle for a bucket pool (scalar markets)
+     */
+    function getBucketPoolHandle(uint8 bucketId) external view returns (bytes32) {
+        return FHE.toBytes32(_bucketPools[bucketId]);
+    }
+
+    /**
+     * @notice Get the encrypted handle for a user's bucket position
+     */
+    function getUserBucketPosition(address user, uint8 bucketId) external view returns (euint64) {
+        return _userBucketPositions[user][bucketId];
+    }
+
     // ── Internal Helpers ───────────────────────────────────────────────────
 
     /**
@@ -460,5 +549,60 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
         if (FHE.isInitialized(_totalNoPool)) {
             FHE.makePubliclyDecryptable(_totalNoPool);
         }
+    }
+
+    /**
+     * @dev Binary market winnings: (userPosition * totalPool) / winnerPool - 2% fee
+     */
+    function _claimBinaryWinnings() internal returns (euint64) {
+        euint64 userPosition;
+        if (resolvedOutcome == 1) {
+            userPosition = _userYesPositions[msg.sender];
+        } else {
+            userPosition = _userNoPositions[msg.sender];
+        }
+
+        if (!FHE.isInitialized(userPosition)) revert NoPosition();
+
+        euint64 totalPool = FHE.add(_totalYesPool, _totalNoPool);
+
+        uint64 winnerPoolClear = resolvedOutcome == 1
+            ? uint64(publicYesPool)
+            : uint64(publicNoPool);
+
+        if (winnerPoolClear == 0) revert NoPosition();
+
+        euint64 numerator = FHE.mul(userPosition, totalPool);
+        euint64 grossWinnings = FHE.div(numerator, winnerPoolClear);
+
+        euint64 fee = FHE.div(grossWinnings, uint64(50));
+        return FHE.sub(grossWinnings, fee);
+    }
+
+    /**
+     * @dev Scalar market winnings: (userBucketPosition * totalPool) / winnerBucketPool - 2% fee
+     */
+    function _claimScalarWinnings() internal returns (euint64) {
+        uint8 winningBucket = uint8(resolvedOutcome);
+        euint64 userPosition = _userBucketPositions[msg.sender][winningBucket];
+
+        if (!FHE.isInitialized(userPosition)) revert NoPosition();
+
+        // Compute total pool across all buckets
+        euint64 totalPool = _bucketPools[0];
+        for (uint8 i = 1; i < bucketCount; i++) {
+            if (FHE.isInitialized(_bucketPools[i])) {
+                totalPool = FHE.add(totalPool, _bucketPools[i]);
+            }
+        }
+
+        uint64 winnerPoolClear = uint64(publicBucketPools[winningBucket]);
+        if (winnerPoolClear == 0) revert NoPosition();
+
+        euint64 numerator = FHE.mul(userPosition, totalPool);
+        euint64 grossWinnings = FHE.div(numerator, winnerPoolClear);
+
+        euint64 fee = FHE.div(grossWinnings, uint64(50));
+        return FHE.sub(grossWinnings, fee);
     }
 }

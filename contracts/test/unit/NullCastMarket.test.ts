@@ -33,7 +33,8 @@ describe("NullCastMarket", function () {
       minimumBet,
       oracle.address,
       owner.address,
-      await cUSDT.getAddress()
+      await cUSDT.getAddress(),
+      0 // binary market
     );
     await marketContract.waitForDeployment();
 
@@ -110,7 +111,8 @@ describe("NullCastMarket", function () {
           1000000,
           ethers.ZeroAddress,
           owner.address,
-          await cUSDT.getAddress()
+          await cUSDT.getAddress(),
+          0
         )
       ).to.be.revertedWithCustomError(NullCastMarket, "ZeroAddress");
     });
@@ -129,7 +131,8 @@ describe("NullCastMarket", function () {
           1000000,
           oracle.address,
           ethers.ZeroAddress,
-          await cUSDT.getAddress()
+          await cUSDT.getAddress(),
+          0
         )
       ).to.be.revertedWithCustomError(NullCastMarket, "ZeroAddress");
     });
@@ -145,7 +148,8 @@ describe("NullCastMarket", function () {
           1000000,
           oracle.address,
           owner.address,
-          ethers.ZeroAddress
+          ethers.ZeroAddress,
+          0
         )
       ).to.be.revertedWithCustomError(NullCastMarket, "ZeroAddress");
     });

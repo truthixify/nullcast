@@ -32,7 +32,8 @@ describe("Full Market Lifecycle Integration", function () {
     await factory.connect(alice).createMarket(
       "Will BTC be above $90k on May 10?",
       expiryBlock,
-      1_000_000
+      1_000_000,
+      0
     );
 
     const marketAddr = await factory.getMarket(0);
@@ -161,7 +162,7 @@ describe("Full Market Lifecycle Integration", function () {
     await factory.waitForDeployment();
 
     const currentBlock = await ethers.provider.getBlockNumber();
-    await factory.connect(alice).createMarket("ETH above $5k?", currentBlock + 20, 1_000_000);
+    await factory.connect(alice).createMarket("ETH above $5k?", currentBlock + 20, 1_000_000, 0);
 
     const marketAddr = await factory.getMarket(0);
     const NullCastMarket = await ethers.getContractFactory("NullCastMarket");

@@ -23,7 +23,8 @@ describe("OracleMock", function () {
       1_000_000,
       await oracle.getAddress(), // oracle is the resolver
       owner.address,
-      await cUSDT.getAddress()
+      await cUSDT.getAddress(),
+      0 // binary market
     );
     await market.waitForDeployment();
 

@@ -65,10 +65,19 @@ contract NullCastFactory is Ownable, Pausable {
      * @param minimumBet Minimum bet amount in cUSDT base units (6 decimals)
      * @return marketAddress Address of the newly deployed market
      */
+    /**
+     * @notice Create a new prediction market (binary or scalar)
+     * @param question Human-readable market question
+     * @param expiryBlock Block number after which no new bets are accepted
+     * @param minimumBet Minimum bet amount in cUSDT base units (6 decimals)
+     * @param _bucketCount Number of buckets for scalar markets (0 = binary)
+     * @return marketAddress Address of the newly deployed market
+     */
     function createMarket(
         string calldata question,
         uint256 expiryBlock,
-        uint256 minimumBet
+        uint256 minimumBet,
+        uint8 _bucketCount
     ) external whenNotPaused returns (address marketAddress) {
         if (bytes(question).length == 0) revert EmptyQuestion();
         if (expiryBlock <= block.number) revert ExpiryInPast();
@@ -76,7 +85,6 @@ contract NullCastFactory is Ownable, Pausable {
         uint256 newMarketId = marketCount;
         marketCount++;
 
-        // Deploy market via CREATE2 for deterministic address
         bytes32 salt = keccak256(abi.encodePacked(newMarketId, msg.sender, block.number));
 
         NullCastMarket market = new NullCastMarket{salt: salt}(
@@ -86,7 +94,8 @@ contract NullCastFactory is Ownable, Pausable {
             minimumBet,
             oracleAddress,
             owner(),
-            cUSDT
+            cUSDT,
+            _bucketCount
         );
 
         marketAddress = address(market);
