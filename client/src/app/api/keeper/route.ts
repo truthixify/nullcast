@@ -56,11 +56,16 @@ const ZERO_HANDLE = ("0x" + "0".repeat(64)) as `0x${string}`;
  * 2. GET /v2/public-decrypt/:jobId → poll until succeeded
  * Returns the decrypted value as bigint.
  */
+interface DecryptResult {
+  value: bigint;
+  signatures: string[];
+  extraData: string;
+}
+
 async function publicDecryptViaRelayer(
   handle: string
-): Promise<bigint | null> {
+): Promise<DecryptResult | null> {
   try {
-    // Step 1: Submit decrypt request
     const submitRes = await fetch(`${RELAYER_URL}/public-decrypt`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -78,7 +83,6 @@ async function publicDecryptViaRelayer(
 
     const jobId = submitData.result.jobId;
 
-    // Step 2: Poll for result (max 30s)
     for (let attempt = 0; attempt < 15; attempt++) {
       await new Promise((r) => setTimeout(r, 2000));
 
@@ -86,14 +90,17 @@ async function publicDecryptViaRelayer(
       const pollData = await pollRes.json();
 
       if (pollData.status === "succeeded" && pollData.result?.decryptedValue) {
-        return BigInt("0x" + pollData.result.decryptedValue);
+        return {
+          value: BigInt("0x" + pollData.result.decryptedValue),
+          signatures: pollData.result.signatures || [],
+          extraData: pollData.result.extraData || "0x",
+        };
       }
 
       if (pollData.status === "failed") {
         console.error("Relayer decrypt failed:", JSON.stringify(pollData));
         return null;
       }
-      // Still processing, continue polling
     }
 
     console.error("Relayer decrypt timed out for job:", jobId);
@@ -162,31 +169,45 @@ export async function GET() {
         }
 
         // Decrypt whichever handles are non-zero
-        const clearYes = yesHandle !== ZERO_HANDLE ? await publicDecryptViaRelayer(yesHandle) : BigInt(0);
-        const clearNo = noHandle !== ZERO_HANDLE ? await publicDecryptViaRelayer(noHandle) : BigInt(0);
+        const yesResult = yesHandle !== ZERO_HANDLE ? await publicDecryptViaRelayer(yesHandle) : null;
+        const noResult = noHandle !== ZERO_HANDLE ? await publicDecryptViaRelayer(noHandle) : null;
 
-        if (clearYes === null && clearNo === null) {
+        if (!yesResult && !noResult) {
           oddsResults.push({ marketId: i, action: "decrypt failed" });
           continue;
         }
 
-        const yesVal = clearYes ?? BigInt(0);
-        const noVal = clearNo ?? BigInt(0);
+        const yesVal = yesResult?.value ?? BigInt(0);
+        const noVal = noResult?.value ?? BigInt(0);
 
-        // Try to call submitOddsUpdate — will fail without valid proof
-        // but at least report the values
+        // Construct proof from KMS signatures
+        // The proof format is: numSigners (as first 32 bytes) + packed signatures + extraData
+        // Each signature is 65 bytes (r + s + v)
+        const sigs = yesResult?.signatures ?? noResult?.signatures ?? [];
+        const extraData = yesResult?.extraData ?? "0x";
+
+        // Build proof bytes: encode as the contract expects
+        // Format: abi.encodePacked(uint256 numSigners, bytes[] sigs, bytes extraData)
+        let proofHex = "0x";
+        if (sigs.length > 0) {
+          // Pack: numSigners (32 bytes) + each sig concatenated + extraData
+          const numSigners = sigs.length.toString(16).padStart(64, "0");
+          const sigsConcat = sigs.map(s => s.startsWith("0x") ? s.slice(2) : s).join("");
+          const extra = extraData.startsWith("0x") ? extraData.slice(2) : extraData;
+          proofHex = ("0x" + numSigners + sigsConcat + extra) as `0x${string}`;
+        }
+
         try {
           const txHash = await walletClient.writeContract({
             address: marketAddr,
             abi: marketAbi,
             functionName: "submitOddsUpdate",
-            args: [yesVal, noVal, "0x"],
+            args: [yesVal, noVal, proofHex as `0x${string}`],
           });
           await publicClient.waitForTransactionReceipt({ hash: txHash });
           oddsResults.push({ marketId: i, action: `updated YES=${Number(yesVal)/1e6} NO=${Number(noVal)/1e6}` });
-        } catch {
-          // submitOddsUpdate failed (needs KMS proof) — report values anyway
-          oddsResults.push({ marketId: i, action: `decrypted YES=${Number(yesVal)/1e6} NO=${Number(noVal)/1e6} (proof required for on-chain update)` });
+        } catch (submitErr) {
+          oddsResults.push({ marketId: i, action: `YES=${Number(yesVal)/1e6} NO=${Number(noVal)/1e6} (submit failed: ${(submitErr as Error).message?.slice(0,40)})` });
         }
       } catch (err) {
         oddsResults.push({ marketId: i, action: `error: ${err instanceof Error ? err.message.slice(0, 60) : "unknown"}` });
@@ -230,9 +251,9 @@ export async function GET() {
       }
 
       // Decrypt via Zama relayer (async: submit → poll)
-      const clearValue = await publicDecryptViaRelayer(handle);
+      const decryptResult = await publicDecryptViaRelayer(handle);
 
-      if (clearValue === null) {
+      if (!decryptResult) {
         results.push({
           marketId: i,
           pool: poolAddr,
@@ -246,7 +267,7 @@ export async function GET() {
           address: poolAddr,
           abi: poolAbi,
           functionName: "setPublicTotalLiquidity",
-          args: [clearValue],
+          args: [decryptResult.value],
         });
 
         await publicClient.waitForTransactionReceipt({ hash: txHash });
@@ -254,7 +275,7 @@ export async function GET() {
         results.push({
           marketId: i,
           pool: poolAddr,
-          action: `updated to ${Number(clearValue) / 1e6} cUSDT`,
+          action: `updated to ${Number(decryptResult.value) / 1e6} cUSDT`,
         });
       } catch (err) {
         results.push({
@@ -310,30 +331,27 @@ export async function GET() {
           continue;
         }
 
-        const clearValue = await publicDecryptViaRelayer(handle);
+        const vaultDecrypt = await publicDecryptViaRelayer(handle);
 
-        if (clearValue === null) {
+        if (!vaultDecrypt) {
           vaultResults.push({ vaultId: v, vault: vaultAddr, action: "decrypt failed" });
           continue;
         }
 
         try {
-          // Set public total shares (decrypted from the handle)
           const txShares = await walletClient.writeContract({
             address: vaultAddr,
             abi: vaultAbi,
             functionName: "setPublicTotalShares",
-            args: [clearValue],
+            args: [vaultDecrypt.value],
           });
           await publicClient.waitForTransactionReceipt({ hash: txShares });
 
-          // Also set public total deposits to same value for now
-          // (vault balance tracking requires reading encrypted cUSDT balance)
           const txDeposits = await walletClient.writeContract({
             address: vaultAddr,
             abi: vaultAbi,
             functionName: "setPublicTotalDeposits",
-            args: [clearValue],
+            args: [vaultDecrypt.value],
           });
           await publicClient.waitForTransactionReceipt({ hash: txDeposits });
 
@@ -346,7 +364,7 @@ export async function GET() {
           vaultResults.push({
             vaultId: v,
             vault: vaultAddr,
-            action: `${vaultName}: shares=${Number(clearValue)}`,
+            action: `${vaultName}: shares=${Number(vaultDecrypt.value)}`,
           });
         } catch (err) {
           vaultResults.push({

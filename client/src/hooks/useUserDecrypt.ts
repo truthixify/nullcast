@@ -151,16 +151,19 @@ export function useUserDecrypt(marketAddress: `0x${string}`) {
     await decrypt();
   }, [invalidate, marketAddress, decrypt]);
 
+  const effectiveYes = yesAmount ?? (cachedYes ? BigInt(cachedYes) : null);
+  const effectiveNo = noAmount ?? (cachedNo ? BigInt(cachedNo) : null);
+
   return {
-    decrypt,
+    decrypt: refresh, // Always do fresh decrypt (clears cache + re-signs)
     refresh,
     isDecrypting,
     error,
     hasYesPosition,
     hasNoPosition,
-    yesAmount: yesAmount ?? (cachedYes ? BigInt(cachedYes) : null),
-    noAmount: noAmount ?? (cachedNo ? BigInt(cachedNo) : null),
-    isDecrypted: yesAmount !== null || noAmount !== null || !!cachedYes || !!cachedNo,
+    yesAmount: effectiveYes,
+    noAmount: effectiveNo,
+    isDecrypted: effectiveYes !== null || effectiveNo !== null,
     isCached: !!(cachedYes || cachedNo) && yesAmount === null && noAmount === null,
   };
 }
