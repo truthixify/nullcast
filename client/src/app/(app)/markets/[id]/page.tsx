@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useAccount, useReadContract } from "wagmi";
 import {
   LockIcon,
-  LockOpenIcon,
   FHEBadge,
   Pill,
   RefreshIcon,
@@ -1067,31 +1066,24 @@ export default function MarketDetailPage({
                       )}
                   </div>
                 ) : (
-                  <div className="stack gap-4" style={{ gap: 10 }}>
-                    <p style={{ fontSize: 12, color: "var(--t-3)" }}>
-                      Encrypted on-chain
-                    </p>
-                    <button
-                      className="btn secondary block"
-                      onClick={userDecrypt.decrypt}
-                      disabled={userDecrypt.isDecrypting}
-                      type="button"
-                    >
-                      <LockOpenIcon size={12} />
-                      {userDecrypt.isDecrypting
-                        ? "Decrypting via KMS..."
-                        : "Decrypt my position"}
-                    </button>
-                    {userDecrypt.isDecrypting && (
-                      <span
-                        className="shimmer mono"
-                        style={{ fontSize: 11, color: "var(--enc)" }}
-                      >
-                        decrypting...
+                  <div>
+                    <div className="row between" style={{ marginBottom: 10 }}>
+                      <span className="enc-val" style={{ fontSize: 13 }}>
+                        <LockIcon size={11} />
+                        <span className="dots mono">•••••••</span>
+                        <span style={{ color: "var(--t-4)", fontSize: 11 }}>cUSDT</span>
                       </span>
-                    )}
+                      <button
+                        className="btn sm secondary"
+                        onClick={userDecrypt.decrypt}
+                        disabled={userDecrypt.isDecrypting}
+                        type="button"
+                      >
+                        {userDecrypt.isDecrypting ? "Decrypting..." : "Decrypt"}
+                      </button>
+                    </div>
                     {userDecrypt.error && (
-                      <p style={{ fontSize: 11, color: "var(--no)" }}>
+                      <p style={{ fontSize: 11, color: "var(--no)", marginTop: 4 }}>
                         {userDecrypt.error}
                       </p>
                     )}
