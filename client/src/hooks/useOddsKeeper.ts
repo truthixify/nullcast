@@ -17,12 +17,12 @@ export function useOddsKeeper(marketAddress: `0x${string}`) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { data: yesHandle } = useReadContract({
+  const { data: yesHandle, refetch: refetchYes } = useReadContract({
     ...config,
     functionName: "getTotalYesPoolHandle",
   });
 
-  const { data: noHandle } = useReadContract({
+  const { data: noHandle, refetch: refetchNo } = useReadContract({
     ...config,
     functionName: "getTotalNoPoolHandle",
   });
@@ -36,22 +36,31 @@ export function useOddsKeeper(marketAddress: `0x${string}`) {
   const { isLoading: isConfirming, isSuccess: isConfirmed } =
     useWaitForTransactionReceipt({ hash: txHash });
 
-  const ZERO_HANDLE = "0x0000000000000000000000000000000000000000000000000000000000000000";
+  const isZeroHandle = (h: unknown): boolean => {
+    if (!h) return true;
+    const s = String(h).toLowerCase();
+    return s === "0x" + "0".repeat(64) || s === "0x0" || s === "0x";
+  };
 
   const updateOdds = useCallback(async () => {
-    if (!yesHandle || !noHandle) {
+    // Refetch handles to get latest values after a bet
+    const [freshYes, freshNo] = await Promise.all([refetchYes(), refetchNo()]);
+    const latestYes = (freshYes.data ?? yesHandle) as `0x${string}` | undefined;
+    const latestNo = (freshNo.data ?? noHandle) as `0x${string}` | undefined;
+
+    if (!latestYes || !latestNo) {
       setError("Pool handles not available yet");
       return;
     }
 
-    const yesHandleHex = yesHandle as `0x${string}`;
-    const noHandleHex = noHandle as `0x${string}`;
-
-    // No bets placed yet — pools are uninitialized (zero handles)
-    if (yesHandleHex === ZERO_HANDLE && noHandleHex === ZERO_HANDLE) {
+    // Either pool uninitialized — can't decrypt zero handles
+    if (isZeroHandle(latestYes) || isZeroHandle(latestNo)) {
       setError("No bets placed yet — pools are empty");
       return;
     }
+
+    const yesHandleHex = latestYes;
+    const noHandleHex = latestNo;
 
     setIsUpdating(true);
     setError(null);
@@ -94,7 +103,7 @@ export function useOddsKeeper(marketAddress: `0x${string}`) {
     } finally {
       setIsUpdating(false);
     }
-  }, [yesHandle, noHandle, config, writeContract]);
+  }, [yesHandle, noHandle, config, writeContract, refetchYes, refetchNo]);
 
   return {
     updateOdds,
