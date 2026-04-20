@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { getMarketConfig } from "@/lib/contracts";
+import { getRelayer } from "@/lib/fhevm";
 
 /**
  * Odds keeper: after a bet is placed, this hook:
@@ -66,25 +67,7 @@ export function useOddsKeeper(marketAddress: `0x${string}`) {
     setError(null);
 
     try {
-      const { RelayerWeb, SepoliaConfig } = await import("@zama-fhe/sdk");
-
-      const relayer = new RelayerWeb({
-        transports: {
-          [SepoliaConfig.chainId]: {
-            relayerUrl: SepoliaConfig.relayerUrl,
-            aclContractAddress: SepoliaConfig.aclContractAddress,
-            kmsContractAddress: SepoliaConfig.kmsContractAddress,
-            inputVerifierContractAddress: SepoliaConfig.inputVerifierContractAddress,
-            verifyingContractAddressDecryption: SepoliaConfig.verifyingContractAddressDecryption,
-            verifyingContractAddressInputVerification: SepoliaConfig.verifyingContractAddressInputVerification,
-            network: SepoliaConfig.network,
-            gatewayChainId: SepoliaConfig.gatewayChainId,
-          },
-        },
-        getChainId: async () => SepoliaConfig.chainId,
-      });
-
-      // Ask KMS to decrypt the publicly-decryptable pool handles
+      const relayer = await getRelayer();
       const result = await relayer.publicDecrypt([yesHandleHex, noHandleHex]);
 
       const clearYes = result.clearValues[yesHandleHex] as bigint;

@@ -3,37 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import { useAccount } from "wagmi";
 import { toHex } from "viem";
-
-type RelayerType = Awaited<ReturnType<typeof createRelayer>>;
-let relayerInstance: RelayerType | null = null;
-
-async function createRelayer() {
-  const { RelayerWeb, SepoliaConfig } = await import("@zama-fhe/sdk");
-
-  const relayer = new RelayerWeb({
-    transports: {
-      [SepoliaConfig.chainId]: {
-        relayerUrl: SepoliaConfig.relayerUrl,
-        aclContractAddress: SepoliaConfig.aclContractAddress,
-        kmsContractAddress: SepoliaConfig.kmsContractAddress,
-        inputVerifierContractAddress: SepoliaConfig.inputVerifierContractAddress,
-        verifyingContractAddressDecryption: SepoliaConfig.verifyingContractAddressDecryption,
-        verifyingContractAddressInputVerification: SepoliaConfig.verifyingContractAddressInputVerification,
-        network: SepoliaConfig.network,
-        gatewayChainId: SepoliaConfig.gatewayChainId,
-      },
-    },
-    getChainId: async () => SepoliaConfig.chainId,
-  });
-
-  return relayer;
-}
-
-async function getRelayer() {
-  if (relayerInstance) return relayerInstance;
-  relayerInstance = await createRelayer();
-  return relayerInstance;
-}
+import { getRelayer } from "@/lib/fhevm";
 
 export function useFHEEncrypt() {
   const { address } = useAccount();

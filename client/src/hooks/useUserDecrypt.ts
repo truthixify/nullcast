@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useAccount, useReadContract, useSignTypedData } from "wagmi";
 import { getMarketConfig } from "@/lib/contracts";
+import { getRelayer } from "@/lib/fhevm";
 import { useNullCastStore } from "@/lib/store";
 
 /**
@@ -68,23 +69,7 @@ export function useUserDecrypt(marketAddress: `0x${string}`) {
     setError(null);
 
     try {
-      const { RelayerWeb, SepoliaConfig } = await import("@zama-fhe/sdk");
-
-      const relayer = new RelayerWeb({
-        transports: {
-          [SepoliaConfig.chainId]: {
-            relayerUrl: SepoliaConfig.relayerUrl,
-            aclContractAddress: SepoliaConfig.aclContractAddress,
-            kmsContractAddress: SepoliaConfig.kmsContractAddress,
-            inputVerifierContractAddress: SepoliaConfig.inputVerifierContractAddress,
-            verifyingContractAddressDecryption: SepoliaConfig.verifyingContractAddressDecryption,
-            verifyingContractAddressInputVerification: SepoliaConfig.verifyingContractAddressInputVerification,
-            network: SepoliaConfig.network,
-            gatewayChainId: SepoliaConfig.gatewayChainId,
-          },
-        },
-        getChainId: async () => SepoliaConfig.chainId,
-      });
+      const relayer = await getRelayer();
 
       // Step 1: Generate ephemeral keypair
       const keypair = await relayer.generateKeypair();
