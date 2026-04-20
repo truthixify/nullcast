@@ -46,16 +46,6 @@ type DepositStep =
   | "confirmed"
   | "error";
 
-/* ── Format pool amount ──────────────────────────────────────── */
-
-function formatPool(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 /* ── MarketLPCard — per-market liquidity card ────────────────── */
 
@@ -81,7 +71,7 @@ function MarketLPCard({
     !poolAddress || poolAddress === "0x0000000000000000000000000000000000000000";
 
   /* ── Pool stats ────────────────────────────────────────────── */
-  const { totalLiquidity, lpCount, isLoading: isPoolLoading } = useLiquidityPool(
+  const { lpCount } = useLiquidityPool(
     isZeroPool
       ? ("0x0000000000000000000000000000000000000000" as `0x${string}`)
       : poolAddress
@@ -228,22 +218,9 @@ function MarketLPCard({
           style={{ marginBottom: 16, fontSize: 13, color: "var(--t-2)" }}
         >
           <span className="mono">
-            Total liquidity:{" "}
-            <span style={{ color: "var(--t-1)", fontWeight: 500 }}>
-              {isPoolLoading ? "..." : `${formatPool(totalLiquidity)} cUSDT`}
-            </span>
+            {lpCount} LP{lpCount !== 1 ? "s" : ""}
           </span>
-          <span className="mono" style={{ color: "var(--t-3)" }}>
-            {isPoolLoading ? "..." : `${lpCount} LP${lpCount !== 1 ? "s" : ""}`}
-          </span>
-        </div>
-
-        {/* Pool address */}
-        <div style={{ marginBottom: 16 }}>
-          <span
-            className="mono"
-            style={{ fontSize: 11, color: "var(--t-4)" }}
-          >
+          <span className="mono" style={{ fontSize: 11, color: "var(--t-4)" }}>
             Pool: {poolAddress.slice(0, 6)}...{poolAddress.slice(-4)}
           </span>
         </div>
@@ -384,23 +361,26 @@ function MarketLPCard({
             type="button"
             onClick={handleDeposit}
             disabled={
+              !userAddress ||
               depositStep !== "idle" ||
               amountNum <= 0 ||
               addLiq.isWriting ||
               addLiq.isConfirming
             }
           >
-            {depositStep === "encrypting"
-              ? "Encrypting..."
-              : depositStep === "approving"
-                ? "Approving cUSDT..."
-                : depositStep === "writing" || addLiq.isWriting
-                  ? "Confirm in wallet..."
-                  : addLiq.isConfirming
-                    ? "Confirming..."
-                    : depositStep === "confirmed"
-                      ? "Deposited"
-                      : `Deposit ${amountNum > 0 ? `${amountNum} cUSDT` : ""}`}
+            {!userAddress
+              ? "Connect wallet to deposit"
+              : depositStep === "encrypting"
+                ? "Encrypting..."
+                : depositStep === "approving"
+                  ? "Approving cUSDT..."
+                  : depositStep === "writing" || addLiq.isWriting
+                    ? "Confirm in wallet..."
+                    : addLiq.isConfirming
+                      ? "Confirming..."
+                      : depositStep === "confirmed"
+                        ? "Deposited"
+                        : `Deposit ${amountNum > 0 ? `${amountNum} cUSDT` : ""}`}
           </button>
 
           {/* Error state */}
@@ -474,53 +454,7 @@ function MarketLPCard({
 /* ── Liquidity page ──────────────────────────────────────────── */
 
 export default function LiquidityPage() {
-  const { isConnected } = useAccount();
   const { allMarkets, isLoading } = useFactoryMarkets();
-
-  /* Not connected */
-  if (!isConnected) {
-    return (
-      <div className="page">
-        <div className="container">
-          <div className="page-head" style={{ padding: 0, marginBottom: 32 }}>
-            <h1 style={{ fontSize: 36 }}>Liquidity</h1>
-          </div>
-          <div
-            className="card elevated"
-            style={{
-              padding: "64px 32px",
-              textAlign: "center",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 16,
-            }}
-          >
-            <LockIcon size={32} />
-            <p
-              style={{
-                fontSize: 15,
-                fontWeight: 500,
-                color: "var(--t-2)",
-              }}
-            >
-              Connect your wallet to provide liquidity
-            </p>
-            <p
-              style={{
-                fontSize: 13,
-                color: "var(--t-3)",
-                maxWidth: 360,
-              }}
-            >
-              LP positions are encrypted on-chain. Only your wallet can view
-              your share.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="page">

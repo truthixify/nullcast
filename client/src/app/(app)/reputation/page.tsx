@@ -5,7 +5,6 @@ import { useAccount } from "wagmi";
 import { useReputation } from "@/hooks/useReputation";
 import { useMintCUSDT } from "@/hooks/useCUSDT";
 import {
-  LockIcon,
   LockOpenIcon,
   CheckIcon,
   ExternalIcon,
@@ -264,38 +263,6 @@ export default function ReputationPage() {
   const demoScore = 72;
   const currentTier = scoreState === "revealed" && hasScore ? getTierFromScore(demoScore) : null;
 
-  // Not connected
-  if (!isConnected || !address) {
-    return (
-      <div className="page">
-        <div className="container">
-          <div className="page-head" style={{ padding: 0, marginBottom: 32 }}>
-            <h1 style={{ fontSize: 36 }}>Reputation</h1>
-          </div>
-          <div
-            className="card elevated"
-            style={{
-              padding: "64px 32px",
-              textAlign: "center",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 16,
-            }}
-          >
-            <LockIcon size={32} />
-            <p style={{ fontSize: 15, fontWeight: 500, color: "var(--t-2)" }}>
-              Connect your wallet to view your reputation
-            </p>
-            <p style={{ fontSize: 13, color: "var(--t-3)", maxWidth: 360 }}>
-              Your reputation score is stored on-chain as an encrypted euint8. Only your wallet can decrypt it.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="page">
       <div className="container">
@@ -342,15 +309,17 @@ export default function ReputationPage() {
               <button
                 className="btn primary lg"
                 onClick={handleMint}
-                disabled={isMintWriting || isMintConfirming}
+                disabled={!isConnected || !address || isMintWriting || isMintConfirming}
               >
-                {isMintWriting
-                  ? "Confirm..."
-                  : isMintConfirming
-                    ? (
-                      <span className="shimmer">Minting...</span>
-                    )
-                    : "Mint 10,000 cUSDT"}
+                {!isConnected || !address
+                  ? "Connect wallet to mint"
+                  : isMintWriting
+                    ? "Confirm..."
+                    : isMintConfirming
+                      ? (
+                        <span className="shimmer">Minting...</span>
+                      )
+                      : "Mint 10,000 cUSDT"}
               </button>
             </div>
           </div>
@@ -404,10 +373,10 @@ export default function ReputationPage() {
                 <button
                   className="btn secondary"
                   onClick={handleDecryptScore}
-                  disabled={scoreState !== "hidden" || !hasScore}
+                  disabled={!isConnected || !address || scoreState !== "hidden" || !hasScore}
                 >
                   <LockOpenIcon size={14} />
-                  Decrypt score
+                  {!isConnected || !address ? "Connect wallet" : "Decrypt score"}
                 </button>
 
                 <div style={{ fontSize: 12, color: "var(--t-3)", textAlign: "center" }}>

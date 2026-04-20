@@ -9,7 +9,6 @@ import {
   ChevronIcon,
   CheckIcon,
   ExternalIcon,
-  LockIcon,
 } from "@/components/shared/Icons";
 
 const SEPOLIA_BLOCK_TIME_SECONDS = 12;
@@ -134,33 +133,8 @@ export default function CreateMarketPage() {
           </p>
         </div>
 
-        {/* Not connected */}
-        {!isConnected && (
-          <div
-            className="card elevated"
-            style={{
-              padding: "64px 32px",
-              textAlign: "center",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 16,
-            }}
-          >
-            <LockIcon size={32} />
-            <p style={{ fontSize: 15, fontWeight: 500, color: "var(--t-2)" }}>
-              Connect your wallet to create a market
-            </p>
-            <p style={{ fontSize: 13, color: "var(--t-3)", maxWidth: 360 }}>
-              You need a connected wallet and sufficient reputation.
-            </p>
-          </div>
-        )}
-
         {/* Form */}
-        {isConnected && (
-          <>
-            <div className="card elevated" style={{ overflow: "hidden" }}>
+        <div className="card elevated" style={{ overflow: "hidden" }}>
               <div className="card-body" style={{ padding: 24 }}>
                 <div className="stack gap-6">
                   {/* Question */}
@@ -365,16 +339,18 @@ export default function CreateMarketPage() {
                       className="btn primary lg"
                       type="button"
                       onClick={handleSubmit}
-                      disabled={!isFormValid || txState !== "idle"}
+                      disabled={!isConnected || !isFormValid || txState !== "idle"}
                     >
-                      {txState === "idle" ? "Create Market" : "Processing..."}
+                      {!isConnected
+                        ? "Connect wallet to deploy"
+                        : txState === "idle"
+                          ? "Create Market"
+                          : "Processing..."}
                     </button>
                   </div>
                 </div>
               </div>
             </div>
-          </>
-        )}
       </div>
 
       <style>{`

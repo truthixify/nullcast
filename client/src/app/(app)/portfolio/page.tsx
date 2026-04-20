@@ -241,38 +241,6 @@ export default function PortfolioPage() {
   const [activeTab, setActiveTab] = useState<"active" | "settled" | "lp">("active");
   const [decryptAll, setDecryptAll] = useState(false);
 
-  // Not connected
-  if (!isConnected || !address) {
-    return (
-      <div className="page">
-        <div className="container">
-          <div className="page-head" style={{ padding: 0, marginBottom: 32 }}>
-            <h1 style={{ fontSize: 36 }}>Portfolio</h1>
-          </div>
-          <div
-            className="card elevated"
-            style={{
-              padding: "64px 32px",
-              textAlign: "center",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 16,
-            }}
-          >
-            <LockIcon size={32} />
-            <p style={{ fontSize: 15, fontWeight: 500, color: "var(--t-2)" }}>
-              Connect your wallet to view your portfolio
-            </p>
-            <p style={{ fontSize: 13, color: "var(--t-3)", maxWidth: 360 }}>
-              Your positions are encrypted on-chain. Only your wallet can decrypt them.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const tabs = [
     { key: "active" as const, label: "Active" },
     { key: "settled" as const, label: "Settled" },
@@ -290,7 +258,7 @@ export default function PortfolioPage() {
               Your positions are encrypted. Only you can decrypt them.
             </p>
           </div>
-          <button className="btn secondary" onClick={() => setDecryptAll(true)} disabled={decryptAll}>
+          <button className="btn secondary" onClick={() => setDecryptAll(true)} disabled={!isConnected || !address || decryptAll}>
             <LockOpenIcon size={14} />
             {decryptAll ? "Decrypting…" : "Decrypt all"}
           </button>
@@ -342,7 +310,28 @@ export default function PortfolioPage() {
           {/* Active tab */}
           {activeTab === "active" && (
             <>
-              {isMarketsLoading ? (
+              {!isConnected || !address ? (
+                <div
+                  style={{
+                    padding: "80px 20px",
+                    textAlign: "center",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 12,
+                    color: "var(--t-3)",
+                    fontSize: 13,
+                  }}
+                >
+                  <LockIcon size={24} />
+                  <span style={{ fontWeight: 500, color: "var(--t-2)" }}>
+                    Connect wallet to view positions
+                  </span>
+                  <span style={{ fontSize: 12, maxWidth: 320 }}>
+                    Your positions are encrypted on-chain. Only your wallet can decrypt them.
+                  </span>
+                </div>
+              ) : isMarketsLoading ? (
                 <div
                   className="row"
                   style={{
