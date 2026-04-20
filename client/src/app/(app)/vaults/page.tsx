@@ -23,11 +23,16 @@ type DepositStep =
 /* ── Tier label helper ───────────────────────────────────────── */
 
 function tierLabel(tier: number): string {
-  if (tier >= 80) return "Diamond (80+)";
-  if (tier >= 60) return "Gold (60+)";
-  if (tier >= 40) return "Silver (40+)";
-  if (tier >= 20) return "Bronze (20+)";
+  if (tier >= 80) return "Oracle";
+  if (tier >= 60) return "Strategist";
+  if (tier >= 40) return "Analyst";
+  if (tier >= 20) return "Explorer";
   return "Open";
+}
+
+function followerTierLabel(tier: number): string {
+  if (tier === 0) return "Anyone can deposit";
+  return `Requires ${tierLabel(tier)}+ (≥${tier})`;
 }
 
 function truncAddr(addr: string): string {
@@ -199,9 +204,9 @@ function VaultCard({ address }: { address: `0x${string}` }) {
             </div>
           </div>
           <div>
-            <div className="eyebrow">Required tier</div>
-            <div style={{ color: "var(--t-1)" }}>
-              {requiredTier !== undefined ? tierLabel(requiredTier) : "--"}
+            <div className="eyebrow">Follower gate</div>
+            <div style={{ color: "var(--t-1)", fontSize: 12 }}>
+              {requiredTier !== undefined ? followerTierLabel(requiredTier) : "--"}
             </div>
           </div>
           <div>

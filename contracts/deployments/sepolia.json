@@ -2,30 +2,30 @@
   "network": "sepolia",
   "chainId": 11155111,
   "deployer": "0x33b69cA4EA27Ad2f83AB73cd6bBf635Cf25E5812",
-  "deployedAt": "2026-04-20T10:44:38.338Z",
+  "deployedAt": "2026-04-20T11:08:51.325Z",
   "contracts": {
-    "MockcUSDT": "0x904793F739dA238686078dDC477CeFD2a071F9F9",
-    "OracleMock": "0xF01fa4F99146A938633E06DC8C9B3CE72778a846",
-    "ReputationGate": "0xfC448A571c0bEBf9B7f5AfA2bac89137F460DeA8",
-    "NullCastFactory": "0x5BEe5fae827Cebd188A44C55d89323693888c059",
-    "VaultFactory": "0xe3675c64a72eFc3e89105B826720Eb7E9f956f8a"
+    "MockcUSDT": "0x430C1967b69234Bd41F097fF140fe3d94Ac29594",
+    "OracleMock": "0x47602c260e868062BA477FB11Ee17AECCfb6A3AF",
+    "ReputationGate": "0x9B6d55260b0320702c76712a3F366d9C03fAA593",
+    "NullCastFactory": "0x4FfB6390887fbc7afE551dFf5e37d885ba3d1fe5",
+    "VaultFactory": "0xecfDae274586C1a59Fd5616a7FB36Cc39f6c97dA"
   },
   "markets": {
     "BTC-1": {
       "id": 0,
-      "address": "0xF539719aDf6646D0842aCECbBB1190EeecAE8F55",
+      "address": "0x4880e35a2D5C5D59DAFAD07C465c1b5Ef0D76729",
       "question": "BTC above $90,000 on April 30, 2026?",
       "type": "binary"
     },
     "ETH-1": {
       "id": 1,
-      "address": "0xA04f5885f979FC925487327aA027C7781BEec5BC",
+      "address": "0xd5dB7Df2189550007fac4CAf4c48844179818b76",
       "question": "ETH above $2,000 on May 5, 2026?",
       "type": "binary"
     },
     "SCALAR-1": {
       "id": 2,
-      "address": "0xf2848303d93149dF0113fE8c13404A07b99924C4",
+      "address": "0x2CDf37E3933E0b1D70ECed79552868Ba55E62995",
       "question": "BTC price range on May 10: <$80k / $80k-$100k / >$100k",
       "type": "scalar",
       "buckets": 3

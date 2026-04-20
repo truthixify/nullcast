@@ -40,8 +40,8 @@ contract StrategyVault is ZamaEthereumConfig, ReentrancyGuard {
     string public description;
     address public manager;
     address public factoryOwner;
-    uint8 public requiredTier; // minimum reputation threshold to manage
-    uint8 public performanceFeeBps; // basis points (e.g. 1000 = 10%)
+    uint8 public requiredTier; // minimum reputation for followers to deposit (0 = open)
+    uint16 public performanceFeeBps; // basis points (e.g. 1000 = 10%)
 
     IConfidentialERC20 public cUSDT;
     bool public closed;
@@ -79,8 +79,8 @@ contract StrategyVault is ZamaEthereumConfig, ReentrancyGuard {
      * @param _vaultId Unique vault identifier
      * @param _name Vault display name
      * @param _description Strategy description
-     * @param _manager Manager address (must meet tier threshold)
-     * @param _requiredTier Minimum reputation tier to manage (e.g. 60 = Strategist)
+     * @param _manager Manager address
+     * @param _requiredTier Minimum reputation for followers to deposit (0 = open)
      * @param _performanceFeeBps Performance fee in basis points (e.g. 1000 = 10%)
      * @param _cUSDT Confidential USDT contract address
      * @param _factoryOwner Protocol owner for admin operations
@@ -91,7 +91,7 @@ contract StrategyVault is ZamaEthereumConfig, ReentrancyGuard {
         string memory _description,
         address _manager,
         uint8 _requiredTier,
-        uint8 _performanceFeeBps,
+        uint16 _performanceFeeBps,
         address _cUSDT,
         address _factoryOwner
     ) {

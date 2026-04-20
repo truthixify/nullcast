@@ -51,7 +51,7 @@ contract VaultFactory is Ownable {
         string calldata name_,
         string calldata description_,
         uint8 requiredTier,
-        uint8 performanceFeeBps
+        uint16 performanceFeeBps
     ) external returns (address vaultAddress) {
         if (bytes(name_).length == 0) revert EmptyName();
 

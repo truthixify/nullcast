@@ -27,9 +27,9 @@
         "type": "uint8"
       },
       {
-        "internalType": "uint8",
+        "internalType": "uint16",
         "name": "_performanceFeeBps",
-        "type": "uint8"
+        "type": "uint16"
       },
       {
         "internalType": "address",
@@ -385,9 +385,9 @@
     "name": "performanceFeeBps",
     "outputs": [
       {
-        "internalType": "uint8",
+        "internalType": "uint16",
         "name": "",
-        "type": "uint8"
+        "type": "uint16"
       }
     ],
     "stateMutability": "view",

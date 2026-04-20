@@ -12,11 +12,11 @@ import {
 } from "@/components/shared/Icons";
 
 const TIER_OPTIONS = [
-  { value: 0, label: "Open (no requirement)" },
-  { value: 20, label: "Bronze (20+)" },
-  { value: 40, label: "Silver (40+)" },
-  { value: 60, label: "Gold (60+)" },
-  { value: 80, label: "Diamond (80+)" },
+  { value: 0, label: "Open — anyone can deposit" },
+  { value: 20, label: "Explorer+ (score ≥ 20)" },
+  { value: 40, label: "Analyst+ (score ≥ 40)" },
+  { value: 60, label: "Strategist+ (score ≥ 60)" },
+  { value: 80, label: "Oracle+ (score ≥ 80)" },
 ] as const;
 
 export default function CreateVaultPage() {

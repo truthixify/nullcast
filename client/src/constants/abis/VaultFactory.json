@@ -147,9 +147,9 @@
         "type": "uint8"
       },
       {
-        "internalType": "uint8",
+        "internalType": "uint16",
         "name": "performanceFeeBps",
-        "type": "uint8"
+        "type": "uint16"
       }
     ],
     "name": "createVault",
