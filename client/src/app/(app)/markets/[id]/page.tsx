@@ -15,7 +15,6 @@ import {
   IconExternal,
 } from "@/components/shared/Icons";
 import { OddsBar } from "@/components/shared/OddsBar";
-import { EncryptedValue } from "@/components/shared/EncryptedValue";
 import { useMarket, useHasPosition } from "@/hooks/useMarket";
 import { usePlaceBet } from "@/hooks/usePlaceBet";
 import { useClaimWinnings } from "@/hooks/useClaimWinnings";
@@ -139,7 +138,6 @@ export default function MarketDetailPage({
   const [side, setSide] = useState<"YES" | "NO">("YES");
   const [amount, setAmount] = useState("100");
   const [betStep, setBetStep] = useState<BetStep>("idle");
-  const [positionRevealed, setPositionRevealed] = useState(false);
 
   /* ── Derived values ─────────────────────────────────────────── */
   const amountNum = parseFloat(amount) || 0;
@@ -158,13 +156,15 @@ export default function MarketDetailPage({
   const isMarketResolved = market.status === 3;
   const isMarketCancelled = market.status === 4;
 
-  const localPosition = useMemo(
+  const localPositions = useMemo(
     () =>
       hasAddress
-        ? storedPositions.find((p) => p.marketAddress === resolvedAddress)
-        : undefined,
+        ? storedPositions.filter((p) => p.marketAddress === resolvedAddress)
+        : [],
     [storedPositions, resolvedAddress, hasAddress]
   );
+
+  const totalLocalAmount = localPositions.reduce((sum, p) => sum + p.amount, 0);
 
   const quickAmounts = [25, 50, 100, 250];
 
@@ -1317,7 +1317,7 @@ export default function MarketDetailPage({
                 </div>
 
                 {/* Position section */}
-                {(hasPosition || localPosition) && (
+                {(hasPosition || localPositions.length > 0) && (
                   <div
                     style={{
                       marginTop: "20px",
@@ -1340,76 +1340,75 @@ export default function MarketDetailPage({
                           color: "var(--color-text-secondary)",
                         }}
                       >
-                        Your position
+                        Your position{localPositions.length > 1 ? "s" : ""}
                       </span>
-                      {localPosition && (
-                        <span
-                          className={`pill ${localPosition.side === "YES" ? "pill-yes" : "pill-no"}`}
-                        >
-                          {localPosition.side}
-                        </span>
-                      )}
+                      <LockIcon size={12} stroke="var(--color-privacy-text)" />
                     </div>
-                    {localPosition && (
-                      <>
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            marginBottom: "8px",
-                          }}
-                        >
-                          <span
+
+                    {localPositions.length > 0 ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        {localPositions.map((pos, i) => (
+                          <div
+                            key={pos.txHash || i}
                             style={{
-                              fontSize: "var(--text-xs)",
-                              color: "var(--color-text-tertiary)",
+                              padding: "10px 12px",
+                              background: "var(--color-bg-base)",
+                              borderRadius: "var(--radius-sm)",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
                             }}
                           >
-                            Entry odds
-                          </span>
-                          <span
-                            className="mono"
-                            style={{ fontSize: "var(--text-sm)" }}
-                          >
-                            {localPosition.entryOdds}%
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                          }}
-                        >
-                          <span
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <span className={`pill ${pos.side === "YES" ? "pill-yes" : "pill-no"}`}>
+                                {pos.side}
+                              </span>
+                              <span className="mono" style={{ fontSize: "var(--text-sm)" }}>
+                                {pos.amount} cUSDT
+                              </span>
+                            </div>
+                            <span
+                              className="mono"
+                              style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}
+                            >
+                              @ {pos.entryOdds}%
+                            </span>
+                          </div>
+                        ))}
+                        {localPositions.length > 1 && (
+                          <div
                             style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              padding: "8px 12px",
                               fontSize: "var(--text-xs)",
-                              color: "var(--color-text-tertiary)",
+                              color: "var(--color-text-secondary)",
+                              borderTop: "1px solid var(--color-border-subtle)",
                             }}
                           >
-                            Amount
-                          </span>
-                          <EncryptedValue
-                            value={localPosition.amount}
-                            revealed={localPosition.revealed || positionRevealed}
-                            onReveal={() => setPositionRevealed(true)}
-                            size="sm"
-                          />
-                        </div>
-                      </>
-                    )}
-                    {!localPosition && hasPosition && (
+                            <span>Total staked</span>
+                            <span className="mono" style={{ fontWeight: 500 }}>
+                              {totalLocalAmount} cUSDT
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
                       <p
                         style={{
                           fontSize: "var(--text-xs)",
-                          color: "var(--color-text-tertiary)",
+                          color: "var(--color-privacy-text)",
                           display: "flex",
                           alignItems: "center",
                           gap: "6px",
+                          padding: "10px 12px",
+                          background: "var(--color-privacy-muted)",
+                          borderRadius: "var(--radius-sm)",
                         }}
                       >
-                        <LockIcon size={12} />
-                        You have an encrypted position in this market.
+                        <LockIcon size={12} stroke="var(--color-privacy-text)" />
+                        You have an encrypted position in this market. Your bet
+                        history is stored locally and will persist across sessions.
                       </p>
                     )}
                   </div>
