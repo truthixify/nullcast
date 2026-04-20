@@ -647,7 +647,7 @@ hr.divider { border: 0; margin: 0; }
 
 /* Mobile: ≤640px */
 @media (max-width: 640px) {
-  :root { --pad-x: 16px; --header-h: 56px; }
+  :root { --pad-x: 20px; --header-h: 56px; }
 
   /* Header: compact */
   .site-header .row { gap: var(--s-2); }
@@ -655,7 +655,7 @@ hr.divider { border: 0; margin: 0; }
   .brand .mark svg { width: 18px; height: 18px; }
   .nav { display: none; }
 
-  /* Mobile nav: show bottom tab bar */
+  /* Mobile nav: bottom tab bar */
   .mobile-nav {
     display: flex !important;
     position: fixed;
@@ -663,30 +663,41 @@ hr.divider { border: 0; margin: 0; }
     left: 0;
     right: 0;
     z-index: 40;
-    background: color-mix(in srgb, var(--bg-0) 92%, transparent);
-    backdrop-filter: saturate(140%) blur(14px);
-    -webkit-backdrop-filter: saturate(140%) blur(14px);
-    border-top: 1px solid var(--border-1);
-    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--bg-0) 94%, transparent);
+    backdrop-filter: saturate(160%) blur(20px);
+    -webkit-backdrop-filter: saturate(160%) blur(20px);
+    border-top: 1px solid var(--border-2);
+    padding: 8px 12px calc(10px + env(safe-area-inset-bottom));
     justify-content: space-around;
   }
   .mobile-nav a {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
-    padding: 6px 12px;
+    gap: 4px;
+    padding: 8px 16px;
     border-radius: var(--r-md);
-    font-size: 10px;
+    font-size: 12px;
+    font-weight: 500;
     color: var(--t-3);
     text-decoration: none;
-    transition: color .15s;
+    transition: color .15s, background .15s;
   }
-  .mobile-nav a.active { color: var(--acc); }
+  .mobile-nav a.active {
+    color: var(--acc);
+    background: var(--acc-bg);
+  }
   .mobile-nav a:hover { color: var(--t-1); }
 
   /* Page needs bottom padding for tab bar */
-  .page { padding-bottom: 100px; }
+  .page { padding-bottom: 110px; }
+
+  /* Container: ensure breathing room */
+  .container { padding: 0 var(--pad-x); }
+
+  /* Cards: slight inset so they don't touch edges */
+  .card { border-radius: var(--r-md); }
+  .grid-3 { gap: 12px; }
 
   /* Page heads */
   .page-head h1 { font-size: 26px; }
