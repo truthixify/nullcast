@@ -880,11 +880,12 @@ hr.divider { border: 0; margin: 0; }
   .left-nav { display: none; }
   .mobile-nav {
     display: flex !important;
-    position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
-    background: rgba(12, 11, 10, 0.92);
-    backdrop-filter: blur(14px);
-    border-top: 1px solid var(--line);
-    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 9999;
+    background: rgba(12, 11, 10, 0.95);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--line-2);
+    padding: 10px 8px calc(10px + env(safe-area-inset-bottom));
     justify-content: space-around;
   }
   .mobile-nav a {
@@ -915,39 +916,26 @@ hr.divider { border: 0; margin: 0; }
   .page-container { padding-left: 16px !important; padding-right: 16px !important; padding-bottom: 90px !important; }
 
   /* Market detail: stack columns */
-  [style*="grid-template-columns: 1fr 380px"] {
+  .market-detail-grid {
     grid-template-columns: 1fr !important;
     gap: 24px !important;
   }
-  [style*="grid-template-columns: 1fr 380px"] > aside,
-  [style*="grid-template-columns: 1fr 380px"] > div:last-child {
+  .market-detail-grid > aside,
+  .market-detail-grid > div:last-child {
     position: static !important;
   }
-
-  /* Stats: 2 cols */
-  [style*="grid-template-columns: repeat(4, 1fr)"] {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 16px !important;
+  .market-detail-page {
+    padding: 20px 16px 100px !important;
+  }
+  .market-detail-page h1 {
+    font-size: 26px !important;
   }
 
-  /* Portfolio rows: stack on mobile */
-  [style*="grid-template-columns: 2fr 60px 120px 140px 120px"] {
-    grid-template-columns: 1fr !important;
-    gap: 6px !important;
-    padding: 14px 16px !important;
-  }
-  [style*="grid-template-columns: 2fr 60px 120px 140px 120px"] > span:nth-child(n+3) {
+  /* Activity feed grid: stack on mobile */
+  .market-detail-page [style*="grid-template-columns: 12px"] {
+    grid-template-columns: 12px 1fr !important;
+    gap: 8px !important;
     font-size: 11px !important;
-  }
-
-  /* Meta grid: 2 cols */
-  [style*="grid-template-columns: repeat(4, 1fr)"][class*="mono"] {
-    grid-template-columns: repeat(2, 1fr) !important;
-  }
-
-  /* Odds percentages: smaller */
-  [style*="fontSize: 30"] {
-    font-size: 22px !important;
   }
 
   .ticker-track { animation-duration: 30s; }

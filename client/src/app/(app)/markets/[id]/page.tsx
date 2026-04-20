@@ -8,6 +8,7 @@ import {
   useBlockNumber,
   useWriteContract,
   useWaitForTransactionReceipt,
+  useWatchContractEvent,
 } from "wagmi";
 import { Icon, CheckIcon } from "@/components/shared/Icons";
 import { OddsBar } from "@/components/shared/OddsBar";
@@ -400,14 +401,24 @@ export default function MarketDetailPage({
     claim.claimWinnings();
   }, [isConnected, hasAddress, claim]);
 
-  /* ── Placeholder activity rows ───────────────────────────────── */
-  const placeholderActivity = [
-    { side: "YES", addr: "0x1a2b\u20269c0d", block: "--", mine: false },
-    { side: "NO", addr: "0x3e4f\u2026a1b2", block: "--", mine: false },
-    { side: "YES", addr: "0x5c6d\u2026e3f4", block: "--", mine: false },
-    { side: "YES", addr: "0x7a8b\u202612cd", block: "--", mine: false },
-    { side: "NO", addr: "0x9e0f\u202634ab", block: "--", mine: false },
-  ];
+  /* ── Live activity feed from BetPlaced events ────────────────── */
+  const [activity, setActivity] = useState<Array<{ side: string; addr: string; block: string; mine: boolean }>>([]);
+
+  useWatchContractEvent({
+    address: hasAddress ? resolvedAddress : undefined,
+    abi: [{ type: "event", name: "BetPlaced", inputs: [{ name: "bettor", type: "address", indexed: true }, { name: "marketId", type: "uint256", indexed: true }, { name: "isYes", type: "bool", indexed: false }] }],
+    eventName: "BetPlaced",
+    enabled: hasAddress,
+    onLogs(logs) {
+      const newEntries = logs.map((log) => ({
+        side: log.args.isYes ? "YES" : "NO",
+        addr: `${(log.args.bettor as string).slice(0, 6)}…${(log.args.bettor as string).slice(-4)}`,
+        block: log.blockNumber?.toString() ?? "--",
+        mine: log.args.bettor?.toLowerCase() === userAddress?.toLowerCase(),
+      }));
+      setActivity((prev) => [...newEntries, ...prev].slice(0, 10));
+    },
+  });
 
   /* ── Resolved outcome label ──────────────────────────────────── */
   const resolvedLabel =
@@ -569,7 +580,7 @@ export default function MarketDetailPage({
   /* ── Render ──────────────────────────────────────────────────── */
   return (
     <div
-      className="page-in"
+      className="page-in market-detail-page"
       style={{
         maxWidth: 1280,
         margin: "0 auto",
@@ -615,6 +626,7 @@ export default function MarketDetailPage({
       </div>
 
       <div
+        className="market-detail-grid"
         style={{
           display: "grid",
           gridTemplateColumns: "1fr 380px",
@@ -972,7 +984,12 @@ export default function MarketDetailPage({
                 overflow: "hidden",
               }}
             >
-              {placeholderActivity.map((row, i) => (
+              {activity.length === 0 && (
+                <div style={{ padding: "24px 18px", textAlign: "center", color: "var(--ink-3)", fontSize: 12 }}>
+                  No bets placed yet. Activity appears here in real-time.
+                </div>
+              )}
+              {activity.map((row, i) => (
                 <div
                   key={i}
                   style={{
