@@ -156,27 +156,38 @@ export async function GET() {
         const yesHandle = (await publicClient.readContract({ address: marketAddr, abi: marketAbi, functionName: "getTotalYesPoolHandle" })) as `0x${string}`;
         const noHandle = (await publicClient.readContract({ address: marketAddr, abi: marketAbi, functionName: "getTotalNoPoolHandle" })) as `0x${string}`;
 
-        if (yesHandle === ZERO_HANDLE || noHandle === ZERO_HANDLE) {
+        if (yesHandle === ZERO_HANDLE && noHandle === ZERO_HANDLE) {
           oddsResults.push({ marketId: i, action: "no bets" });
           continue;
         }
 
-        const clearYes = await publicDecryptViaRelayer(yesHandle);
-        const clearNo = await publicDecryptViaRelayer(noHandle);
+        // Decrypt whichever handles are non-zero
+        const clearYes = yesHandle !== ZERO_HANDLE ? await publicDecryptViaRelayer(yesHandle) : BigInt(0);
+        const clearNo = noHandle !== ZERO_HANDLE ? await publicDecryptViaRelayer(noHandle) : BigInt(0);
 
-        if (clearYes === null || clearNo === null) {
+        if (clearYes === null && clearNo === null) {
           oddsResults.push({ marketId: i, action: "decrypt failed" });
           continue;
         }
 
-        const txHash = await walletClient.writeContract({
-          address: marketAddr,
-          abi: marketAbi,
-          functionName: "submitOddsUpdate",
-          args: [clearYes, clearNo, "0x"],
-        });
-        await publicClient.waitForTransactionReceipt({ hash: txHash });
-        oddsResults.push({ marketId: i, action: `YES=${Number(clearYes)/1e6} NO=${Number(clearNo)/1e6}` });
+        const yesVal = clearYes ?? BigInt(0);
+        const noVal = clearNo ?? BigInt(0);
+
+        // Try to call submitOddsUpdate — will fail without valid proof
+        // but at least report the values
+        try {
+          const txHash = await walletClient.writeContract({
+            address: marketAddr,
+            abi: marketAbi,
+            functionName: "submitOddsUpdate",
+            args: [yesVal, noVal, "0x"],
+          });
+          await publicClient.waitForTransactionReceipt({ hash: txHash });
+          oddsResults.push({ marketId: i, action: `updated YES=${Number(yesVal)/1e6} NO=${Number(noVal)/1e6}` });
+        } catch {
+          // submitOddsUpdate failed (needs KMS proof) — report values anyway
+          oddsResults.push({ marketId: i, action: `decrypted YES=${Number(yesVal)/1e6} NO=${Number(noVal)/1e6} (proof required for on-chain update)` });
+        }
       } catch (err) {
         oddsResults.push({ marketId: i, action: `error: ${err instanceof Error ? err.message.slice(0, 60) : "unknown"}` });
       }

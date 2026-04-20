@@ -20,7 +20,6 @@ import { usePlaceBet } from "@/hooks/usePlaceBet";
 import { useClaimWinnings } from "@/hooks/useClaimWinnings";
 import { useApproveCUSDT } from "@/hooks/useCUSDT";
 import { useFHEEncrypt } from "@/hooks/useFHEVM";
-import { useOddsKeeper } from "@/hooks/useOddsKeeper";
 import { useUserDecrypt } from "@/hooks/useUserDecrypt";
 import { nullCastFactoryConfig, getMarketConfig } from "@/lib/contracts";
 import { CONTRACT_ADDRESSES } from "@/constants/addresses";
@@ -242,7 +241,7 @@ export default function MarketDetailPage({
   const claim = useClaimWinnings(hasAddress ? resolvedAddress : zeroAddr);
   const approveCUSDT = useApproveCUSDT();
   const fhe = useFHEEncrypt();
-  const oddsKeeper = useOddsKeeper(hasAddress ? resolvedAddress : zeroAddr);
+  // odds keeper removed — using /api/keeper server-side instead
   const userDecrypt = useUserDecrypt(hasAddress ? resolvedAddress : zeroAddr);
 
   /* ── Current block for dispute window countdown ──────────────── */
@@ -387,8 +386,11 @@ export default function MarketDetailPage({
       });
       setBetStep("confirmed");
       invalidateDecrypt(resolvedAddress);
-      oddsKeeper.updateOdds();
-      setTimeout(() => market.refetch(), 15_000);
+      // Auto-decrypt position after bet to show updated total
+      setTimeout(() => userDecrypt.refresh(), 3000);
+      // Trigger odds sync
+      fetch("/api/keeper").catch(() => {});
+      setTimeout(() => market.refetch(), 8000);
     }
     if (!isBetConfirmed) {
       prevBetConfirmed.current = false;
@@ -404,7 +406,6 @@ export default function MarketDetailPage({
     bet.hash,
     addPosition,
     invalidateDecrypt,
-    oddsKeeper,
     market,
   ]);
 

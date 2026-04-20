@@ -16,11 +16,13 @@ export function useLiquidityPool(poolAddress: `0x${string}`) {
   const { data: publicTotalLiquidity, isLoading: isLiqLoading } = useReadContract({
     ...config,
     functionName: "publicTotalLiquidity",
+    query: { refetchInterval: 15_000 },
   });
 
   const { data: lpCount, isLoading: isCountLoading } = useReadContract({
     ...config,
     functionName: "getLPCount",
+    query: { refetchInterval: 15_000 },
   });
 
   return {

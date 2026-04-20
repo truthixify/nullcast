@@ -861,6 +861,19 @@ hr.divider { border: 0; margin: 0; }
 
 /* ========================== Tablet: <= 980px ========================== */
 @media (max-width: 980px) {
+  /* Market detail: single column on tablet */
+  .market-detail-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 20px !important;
+  }
+  .market-detail-grid > aside {
+    position: static !important;
+  }
+  .market-detail-page {
+    padding: 24px 24px 100px !important;
+  }
+
   .detail-2col {
     grid-template-columns: 1fr !important;
     gap: 20px !important;
