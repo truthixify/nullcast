@@ -685,6 +685,33 @@ contract ReputationGate is ZamaEthereumConfig {
 
 ---
 
+### 5.6 StrategyVault.sol
+
+**Purpose:** Copy-trading vault where a manager places bets on behalf of followers.
+
+Key state:
+- `manager` — address with betting authority (must meet reputation tier)
+- `requiredTier` — minimum reputation threshold to manage (e.g. 60 = Strategist)
+- `performanceFeeBps` — manager's fee in basis points (e.g. 1000 = 10%)
+- `_deposits[address]` — encrypted follower deposit amounts (euint64)
+- `_totalDeposits` — encrypted aggregate, marked publicly decryptable
+- `followerCount`, `marketsTraded` — public stats
+
+Key functions:
+- `deposit(encryptedAmount, inputProof)` — follower deposits cUSDT
+- `placeBetFromVault(market, encryptedAmount, inputProof, isYes)` — manager places bet
+- `closeVault()` — manager closes, enables withdrawals
+- `withdraw()` — follower withdraws after close
+
+### 5.7 VaultFactory.sol
+
+**Purpose:** Deploy and register strategy vaults.
+
+- `createVault(name, description, requiredTier, performanceFeeBps)` → deploys StrategyVault
+- `getAllVaults()`, `getVault(id)`, `getVaultCount()` — registry views
+
+---
+
 ## 6. Market Lifecycle
 
 ```
@@ -1144,89 +1171,131 @@ event ScoreDecayed(address indexed user, uint256 blockNumber);
 nullcast/
 ├── README.md
 ├── SPEC.md                         (this document)
-├── package.json
 │
-├── contracts/
-│   ├── NullCastFactory.sol
-│   ├── NullCastMarket.sol
-│   ├── LiquidityPool.sol
-│   ├── OracleMock.sol
-│   ├── ReputationGate.sol
-│   ├── interfaces/
-│   │   ├── INullCastMarket.sol
-│   │   ├── ILiquidityPool.sol
-│   │   └── IReputationGate.sol
-│   └── mocks/
-│       └── MockcUSDT.sol
+├── contracts/                      # Hardhat project
+│   ├── contracts/
+│   │   ├── NullCastMarket.sol      # Core FHE prediction market
+│   │   ├── NullCastFactory.sol     # Market + LP pool deployment
+│   │   ├── LiquidityPool.sol       # Encrypted LP shares + fee distribution
+│   │   ├── OracleMock.sol          # Sepolia demo resolver
+│   │   ├── ReputationGate.sol      # Encrypted scores + tiers
+│   │   ├── StrategyVault.sol       # Copy-trading vault
+│   │   ├── VaultFactory.sol        # Vault deployment + registry
+│   │   ├── interfaces/
+│   │   │   ├── INullCastMarket.sol
+│   │   │   ├── IConfidentialERC20.sol
+│   │   │   └── IReputationGate.sol
+│   │   └── mocks/
+│   │       └── MockcUSDT.sol
+│   ├── scripts/
+│   │   ├── deploy.ts               (deploy all contracts)
+│   │   ├── createDemoMarkets.ts    (seed demo markets with categories)
+│   │   ├── oddsKeeper.ts           (update odds via public decrypt)
+│   │   └── computeScores.ts        (reputation score keeper)
+│   ├── test/
+│   │   ├── unit/                   (9 test files, 122 tests)
+│   │   └── integration/            (2 lifecycle tests)
+│   ├── deployments/sepolia.json
+│   ├── hardhat.config.ts
+│   └── .env.example
 │
-├── scripts/
-│   ├── deploy.ts                   (deploy all contracts to Sepolia)
-│   ├── createDemoMarkets.ts        (seed 3 demo markets)
-│   ├── submitOddsUpdate.ts         (keeper script for public decryption)
-│   └── verify.ts                   (verify contracts on Etherscan)
-│
-├── test/
-│   ├── NullCastMarket.test.ts
-│   ├── LiquidityPool.test.ts
-│   ├── ReputationGate.test.ts
-│   └── integration/
-│       └── fullMarketLifecycle.test.ts
-│
-├── frontend/
-│   ├── (Next.js app structure per Section 8.3)
-│   └── ...
-│
-├── hardhat.config.ts
-├── .env.example
-└── deployments/
-    └── sepolia.json                (deployed contract addresses)
+├── client/                         # Next.js 14 frontend
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── page.tsx            (landing)
+│   │   │   ├── api/keeper/         (server-side LP keeper)
+│   │   │   └── (app)/
+│   │   │       ├── markets/        (list, [id] detail, create)
+│   │   │       ├── portfolio/
+│   │   │       ├── liquidity/
+│   │   │       ├── vaults/         (list, create)
+│   │   │       └── reputation/
+│   │   ├── components/shared/      (Header, Footer, Icons, OddsBar, etc.)
+│   │   ├── hooks/                  (useMarket, usePlaceBet, useFHEVM, etc.)
+│   │   ├── lib/                    (wagmi, contracts, fhevm, store)
+│   │   ├── constants/              (addresses, ABIs, tiers)
+│   │   └── styles/design.css
+│   └── .env.example
 ```
 
 ---
 
 ## 16. Development Phases
 
-### Phase 1 — Core FHE Contracts 
-- [ ] Set up Hardhat + @fhevm/hardhat-plugin
-- [ ] Implement `NullCastMarket.sol` with binary betting
-- [ ] Implement ACL pattern: pool totals public, positions private
-- [ ] Implement `submitOddsUpdate` with `FHE.checkSignatures`
-- [ ] Write unit tests with mock FHEVM
-- [ ] Test full lifecycle: placeBet → oddsUpdate → resolve → claim
+### Phase 1 — Core FHE Contracts
+- [x] Set up Hardhat + @fhevm/hardhat-plugin
+- [x] Implement `NullCastMarket.sol` with binary betting
+- [x] Implement ACL pattern: pool totals public, positions private
+- [x] Implement `submitOddsUpdate` with `FHE.checkSignatures`
+- [x] Write unit tests with mock FHEVM
+- [x] Test full lifecycle: placeBet → oddsUpdate → resolve → claim
 
-### Phase 2 — Supporting Contracts 
-- [ ] Implement `NullCastFactory.sol`
-- [ ] Implement `LiquidityPool.sol`
-- [ ] Implement `OracleMock.sol`
-- [ ] Implement `ReputationGate.sol` with score decay
-- [ ] Integration test: full market with LP + reputation gate
+### Phase 2 — Supporting Contracts
+- [x] Implement `NullCastFactory.sol` (deploys Market + LiquidityPool per market)
+- [x] Implement `LiquidityPool.sol` with encrypted LP shares
+- [x] Implement `OracleMock.sol`
+- [x] Implement `ReputationGate.sol` with score decay + tier system
+- [x] Integration test: full market with LP + reputation gate
+- [x] Wire `recordParticipation` into placeBet for auto-tracking
 
-### Phase 3 — Scalar Markets 
-- [ ] Extend `NullCastMarket.sol` with scalar market type
-- [ ] Implement `placeBucketBet` and bucket pool management
-- [ ] Test 3-bucket scalar market lifecycle
+### Phase 3 — Scalar Markets
+- [x] Extend `NullCastMarket.sol` with scalar market type
+- [x] Implement `placeBucketBet` and bucket pool management
+- [x] Test 3-bucket scalar market lifecycle
 
-### Phase 4 — Sepolia Deployment 
-- [ ] Deploy all contracts to Sepolia
-- [ ] Verify on Etherscan
-- [ ] Run `createDemoMarkets.ts` to seed live markets
-- [ ] Test with real Sepolia FHEVM + KMS
+### Phase 4 — Sepolia Deployment
+- [x] Deploy all contracts to Sepolia
+- [x] Verify on Etherscan
+- [x] Run `createDemoMarkets.ts` to seed live markets
+- [x] Test with real Sepolia FHEVM + KMS
 
-### Phase 5 — Frontend 
-- [ ] Set up Next.js + RainbowKit + FHEVM SDK
-- [ ] Implement market list + market detail pages
-- [ ] Implement `BetForm` with client-side encryption
-- [ ] Implement odds keeper (calls `submitOddsUpdate` after bets)
-- [ ] Implement user position reveal
-- [ ] Implement portfolio page + winnings claim
-- [ ] Implement reputation widget
+### Phase 5 — Frontend
+- [x] Set up Next.js 14 + RainbowKit + wagmi v2 + @zama-fhe/sdk
+- [x] Market list with category filtering + search
+- [x] Market detail with live odds, betting panel, FHE encryption
+- [x] Odds keeper (frontend hook + server-side API route)
+- [x] User position decryption via KMS (EIP-712 signature flow)
+- [x] Portfolio page with on-chain position reads + decrypt
+- [x] Create market form with category selection
+- [x] Liquidity page with deposit/withdraw/claim
+- [x] Reputation page with tier display + score decrypt + cUSDT faucet
+- [x] Mobile responsive design with bottom tab bar
 - [ ] Deploy to Vercel
 
-### Phase 6 — Polish + Submission 
-- [ ] Write comprehensive README
+### Phase 6 — Market Categories & Dispute Resolution
+- [x] Add `bytes32 category` to markets (CRYPTO, MACRO, EQUITY, SPORTS, TECH)
+- [x] Category filter on market list + selector on create form
+- [x] Refactor constructor to `MarketParams` struct (stack-too-deep fix)
+- [x] 24-hour dispute window (7200 blocks) after resolution
+- [x] `raiseDispute()` — bonded challenge by anyone within window
+- [x] `resolveDispute()` — owner upholds or rejects
+- [x] Claims blocked during dispute window
+- [x] Dispute UI: countdown bar, raise dispute button, under-dispute badge
+
+### Phase 7 — Strategy Vaults (Copy-Trading)
+- [x] `StrategyVault.sol` — encrypted follower deposits, manager bets from vault
+- [x] `VaultFactory.sol` — deploy and register vaults
+- [x] Vault frontend: browse vaults, deposit, create vault form
+- [x] Performance fee support (basis points)
+- [x] Reputation tier gating for vault managers
+- [ ] Vault P&L tracking (public aggregate, encrypted individual)
+- [ ] Auto-copy: manager bet triggers proportional follower allocations
+
+### Phase 8 — Keeper Infrastructure
+- [x] Server-side LP keeper API route (`/api/keeper`)
+- [x] Zama relayer HTTP API integration for public decrypt
+- [x] Reputation score computation keeper script
+- [x] Odds keeper script (Hardhat)
+- [ ] Automated cron scheduling (Vercel cron or external)
+- [ ] Keeper for vault total deposits sync
+
+### Phase 9 — Polish + Submission
+- [x] Comprehensive README with architecture, setup, deployed addresses
+- [x] Design system (warm dark theme, amber accent, indigo encryption)
+- [x] Favicon + OpenGraph + Twitter card metadata
 - [ ] Record 3-minute demo video
-- [ ] Final testing on Sepolia
-- [ ] Submit to Builder Track 
+- [ ] Final end-to-end testing on Sepolia
+- [ ] Submit to Builder Track
 
 ---
 
@@ -1286,20 +1355,29 @@ nullcast/
 
 ## 18. Known Limitations & Future Work
 
-### Demo Limitations (Explicitly Stated in Submission)
+### Current Limitations
 
-- Mock oracle (single EOA) instead of decentralized resolution
+- Mock oracle (single EOA) — production would use Chainlink/UMA
 - Reputation score inputs are simplified for Sepolia (wallet age + tx count)
-- Gas costs not optimized — FHE operations are expensive
-- No dispute mechanism for contested resolutions
+- Gas costs not optimized — FHE operations are ~500k-2M gas per bet
 - Odds update has 5-15 second delay (async decryption is inherent to FHEVM)
+- Vault auto-copy not yet implemented (manager places bets manually)
+- Keeper infrastructure requires manual trigger or external cron
 
-### Future Work (Post-Competition)
+### Already Built (was previously "future work")
+
+- ~~24-hour dispute window with bonded disputers~~ → Implemented in Phase 6
+- ~~Strategy vaults using reputation score as trust tier~~ → Implemented in Phase 7
+- ~~Market categories~~ → Implemented in Phase 6
+- ~~Reputation tier system~~ → Implemented (Oracle/Strategist/Analyst/Explorer)
+- ~~Auto participation tracking~~ → Markets call `recordParticipation` on every bet
+
+### Remaining Future Work
 
 **V2 — Production Oracle**
 - UMA Optimistic Oracle integration for subjective markets
 - Chainlink CCIP for cross-chain market resolution
-- 24-hour dispute window with bonded disputers
+- Multi-sig committee with bonded disputer economics
 
 **V2 — Advanced Market Types**
 - Continuous scalar markets (slider input, not buckets)
@@ -1309,17 +1387,17 @@ nullcast/
 **V3 — Reputation Protocol Expansion**
 - Multi-protocol reputation inputs (Aave, Uniswap, ENS history)
 - Cross-chain reputation aggregation
-- Reputation score as a standalone sellable API for other protocols
+- Reputation score as a standalone API for other protocols
 
-**V3 — Copy-Trading Integration**
-- Strategy vaults using reputation score as trust tier
-- Encrypted performance metrics feeding from NullCast market history
-- Shared frontend: NullCast Markets + NullCast Copy-Trading as unified product
+**V3 — Copy-Trading Expansion**
+- Auto-copy: manager bet triggers proportional follower allocations
+- Encrypted P&L tracking with public aggregate performance
+- Vault leaderboard with tier-based ranking
 
 **V4 — Mainnet**
 - Gas optimization pass on all FHE operations
 - Formal security audit
-- ERC-7984 deep integration with other Zama ecosystem protocols
+- ERC-7984 deep integration with Zama ecosystem protocols
 - Institutional API for direct smart contract integration
 
 ---
