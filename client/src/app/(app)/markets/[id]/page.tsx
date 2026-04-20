@@ -630,7 +630,8 @@ export default function MarketDetailPage({
         style={{
           display: "grid",
           gridTemplateColumns: "1fr 380px",
-          gap: 48,
+          gridTemplateRows: "auto auto",
+          gap: "48px",
           alignItems: "flex-start",
         }}
       >
@@ -940,7 +941,10 @@ export default function MarketDetailPage({
             />
           </div>
 
-          {/* Activity feed */}
+        </div>
+
+        {/* Activity — separate grid child so it can be reordered on mobile */}
+        <div className="market-detail-activity" style={{ marginTop: 0 }}>
           <div style={{ marginTop: 48 }}>
             <div
               style={{
