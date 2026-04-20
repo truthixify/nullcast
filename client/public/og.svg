@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <rect width="1200" height="630" fill="#0b0a09"/>
+  <circle cx="600" cy="280" r="80" stroke="#8a8681" stroke-width="1.5"/>
+  <circle cx="600" cy="280" r="50" stroke="#D4A843" stroke-width="2"/>
+  <circle cx="600" cy="280" r="18" fill="#D4A843"/>
+  <text x="600" y="420" text-anchor="middle" font-family="serif" font-size="52" font-weight="500" fill="#E8E2D9" letter-spacing="-1">NullCast</text>
+  <text x="600" y="470" text-anchor="middle" font-family="monospace" font-size="16" fill="#8a8681" letter-spacing="3">PREDICTION MARKETS  ·  ENCRYPTED POSITIONS  ·  ZAMA FHEVM</text>
+</svg>
