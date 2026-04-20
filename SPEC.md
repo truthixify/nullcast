@@ -176,11 +176,13 @@ FHEVM does not support synchronous on-chain decryption. All decryption is asynch
 
 **Public decryption (for odds display):**
 1. Contract calls `FHE.makePubliclyDecryptable(totalYesPool)` on each bet update
-2. Frontend calls `instance.publicDecrypt([yesPoolHandle, noPoolHandle])` via Relayer SDK
-3. KMS returns `{ clearValues, abiEncodedClearValues, decryptionProof }`
-4. Frontend calls contract's `submitOddsUpdate(clearYes, clearNo, proof)` 
-5. Contract calls `FHE.checkSignatures()` to verify proof, stores `publicYesPool` and `publicNoPool` as plain `uint256`
-6. Frontend reads these public values and computes `odds = publicYesPool / (publicYesPool + publicNoPool)`
+2. Server-side API (`/api/odds`) reads the encrypted handles via `getTotalYesPoolHandle()` / `getTotalNoPoolHandle()`
+3. API calls the Zama relayer REST endpoint (`POST /v2/public-decrypt`) to decrypt the handles
+4. KMS verifies the handles are publicly decryptable, decrypts, and returns cleartext values
+5. API returns `{ yesPool, noPool, yesOdds, noOdds }` to the frontend with a 15s server cache
+6. Frontend computes `odds = yesPool / (yesPool + noPool)` and displays in real-time
+
+No on-chain storage of cleartext odds is required. The privacy guarantee holds because only aggregate totals (marked `makePubliclyDecryptable`) are decrypted — individual positions remain encrypted and only decryptable by the position holder.
 
 This introduces a ~5-15 second delay between a bet being placed and odds updating on the frontend. This is acceptable for a prediction market and is clearly documented in the UI.
 
