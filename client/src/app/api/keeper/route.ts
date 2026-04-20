@@ -19,11 +19,24 @@ const factoryAbi = parseAbi([
   "function getLiquidityPool(uint256 marketId) view returns (address)",
 ]);
 
+const vaultFactoryAbi = parseAbi([
+  "function getVaultCount() view returns (uint256)",
+  "function vaultById(uint256) view returns (address)",
+]);
+
 const poolAbi = parseAbi([
   "function getTotalLiquidityHandle() view returns (bytes32)",
   "function publicTotalLiquidity() view returns (uint256)",
   "function setPublicTotalLiquidity(uint256 value)",
   "function getLPCount() view returns (uint256)",
+]);
+
+const vaultAbi = parseAbi([
+  "function getTotalDepositsHandle() view returns (bytes32)",
+  "function publicTotalDeposits() view returns (uint256)",
+  "function setPublicTotalDeposits(uint256 value)",
+  "function followerCount() view returns (uint256)",
+  "function name() view returns (string)",
 ]);
 
 const ZERO_HANDLE = ("0x" + "0".repeat(64)) as `0x${string}`;
@@ -189,11 +202,99 @@ export async function GET() {
       }
     }
 
+    // ── Sync vault total deposits ──────────────────────────────
+    const vaultResults: Array<{ vaultId: number; vault: string; action: string }> = [];
+
+    try {
+      const vaultCount = await publicClient.readContract({
+        address: CONTRACT_ADDRESSES.VaultFactory as `0x${string}`,
+        abi: vaultFactoryAbi,
+        functionName: "getVaultCount",
+      });
+
+      for (let v = 0; v < Number(vaultCount); v++) {
+        const vaultAddr = (await publicClient.readContract({
+          address: CONTRACT_ADDRESSES.VaultFactory as `0x${string}`,
+          abi: vaultFactoryAbi,
+          functionName: "vaultById",
+          args: [BigInt(v)],
+        })) as `0x${string}`;
+
+        if (!vaultAddr || vaultAddr === "0x0000000000000000000000000000000000000000") {
+          vaultResults.push({ vaultId: v, vault: "none", action: "no vault" });
+          continue;
+        }
+
+        const followers = await publicClient.readContract({
+          address: vaultAddr,
+          abi: vaultAbi,
+          functionName: "followerCount",
+        });
+
+        if (Number(followers) === 0) {
+          vaultResults.push({ vaultId: v, vault: vaultAddr, action: "no followers" });
+          continue;
+        }
+
+        const handle = (await publicClient.readContract({
+          address: vaultAddr,
+          abi: vaultAbi,
+          functionName: "getTotalDepositsHandle",
+        })) as `0x${string}`;
+
+        if (handle === ZERO_HANDLE) {
+          vaultResults.push({ vaultId: v, vault: vaultAddr, action: "zero handle" });
+          continue;
+        }
+
+        const clearValue = await publicDecryptViaRelayer(handle);
+
+        if (clearValue === null) {
+          vaultResults.push({ vaultId: v, vault: vaultAddr, action: "decrypt failed" });
+          continue;
+        }
+
+        try {
+          const txHash = await walletClient.writeContract({
+            address: vaultAddr,
+            abi: vaultAbi,
+            functionName: "setPublicTotalDeposits",
+            args: [clearValue],
+          });
+          await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+          const vaultName = await publicClient.readContract({
+            address: vaultAddr,
+            abi: vaultAbi,
+            functionName: "name",
+          });
+
+          vaultResults.push({
+            vaultId: v,
+            vault: vaultAddr,
+            action: `${vaultName}: updated to ${Number(clearValue) / 1e6} cUSDT`,
+          });
+        } catch (err) {
+          vaultResults.push({
+            vaultId: v,
+            vault: vaultAddr,
+            action: `tx error: ${err instanceof Error ? err.message : "unknown"}`,
+          });
+        }
+      }
+    } catch {
+      // VaultFactory might not exist or have no vaults — not an error
+    }
+
+    const allResults = [...results.map(r => ({ ...r, type: "pool" as const })), ...vaultResults.map(r => ({ ...r, type: "vault" as const }))];
+    const totalUpdated = allResults.filter(r => r.action.startsWith("updated") || r.action.includes("updated to")).length;
+
     return NextResponse.json({
       ok: true,
       timestamp: new Date().toISOString(),
-      updated: results.filter((r) => r.action.startsWith("updated")).length,
-      results,
+      updated: totalUpdated,
+      pools: results,
+      vaults: vaultResults,
     });
   } catch (err) {
     return NextResponse.json(
