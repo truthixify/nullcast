@@ -10,6 +10,7 @@ export function Header() {
   const navItems = [
     { href: "/markets", label: "Markets" },
     { href: "/portfolio", label: "Portfolio" },
+    { href: "/liquidity", label: "Liquidity" },
     { href: "/reputation", label: "Reputation" },
   ];
   return (

@@ -40,6 +40,11 @@
         "internalType": "uint8",
         "name": "_bucketCount",
         "type": "uint8"
+      },
+      {
+        "internalType": "address",
+        "name": "_reputationGate",
+        "type": "address"
       }
     ],
     "stateMutability": "nonpayable",
@@ -856,6 +861,19 @@
         "internalType": "string",
         "name": "",
         "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "reputationGate",
+    "outputs": [
+      {
+        "internalType": "contract IReputationGate",
+        "name": "",
+        "type": "address"
       }
     ],
     "stateMutability": "view",

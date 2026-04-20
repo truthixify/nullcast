@@ -162,16 +162,7 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
     // ── Constructor ────────────────────────────────────────────────────────
 
     /**
-     * @notice Initialize a new binary prediction market
-     * @param _marketId Unique identifier assigned by the factory
-     * @param _question Human-readable market question
-     * @param _expiryBlock Block number after which no new bets are accepted
-     * @param _minimumBet Minimum bet amount in cUSDT base units (6 decimals)
-     * @param _oracle Address authorized to resolve this market
-     * @param _owner Address with pause/cancel authority
-     * @param _cUSDT Address of the confidential USDT contract
-     */
-    /**
+     * @notice Initialize a new prediction market
      * @param _marketId Unique identifier assigned by the factory
      * @param _question Human-readable market question
      * @param _expiryBlock Block number after which no new bets are accepted
@@ -180,7 +171,7 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
      * @param _owner Address with pause/cancel authority
      * @param _cUSDT Address of the confidential USDT contract
      * @param _bucketCount Number of buckets for scalar markets (0 = binary)
-     * @param _reputationGate Address of ReputationGate contract (address(0) for no gate)
+     * @param _reputationGate Address of ReputationGate (address(0) to disable)
      */
     constructor(
         uint256 _marketId,

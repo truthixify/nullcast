@@ -40,7 +40,7 @@ async function main() {
   // ── 4. Deploy NullCastFactory ───────────────────────────────────────
   console.log("\n4/5 Deploying NullCastFactory...");
   const NullCastFactory = await ethers.getContractFactory("NullCastFactory");
-  const factory = await NullCastFactory.deploy(cUSDTAddr, oracleAddr, deployer.address);
+  const factory = await NullCastFactory.deploy(cUSDTAddr, oracleAddr, deployer.address, reputationAddr);
   await factory.waitForDeployment();
   const factoryAddr = await factory.getAddress();
   console.log("   NullCastFactory deployed to:", factoryAddr);

@@ -75,18 +75,18 @@ nullcast/
 
 | Contract | Address | Etherscan |
 |---|---|---|
-| MockcUSDT | `0x9797Dd36EeE3690F75DFe643B41A8cDAf4A45Ba5` | [View](https://sepolia.etherscan.io/address/0x9797Dd36EeE3690F75DFe643B41A8cDAf4A45Ba5#code) |
-| OracleMock | `0x74Bb4A44cceab6a9fA5eDB3455b888007CcF4e20` | [View](https://sepolia.etherscan.io/address/0x74Bb4A44cceab6a9fA5eDB3455b888007CcF4e20#code) |
-| ReputationGate | `0xD0749876b631f29a7B8f02BBcd11eccBd895a370` | [View](https://sepolia.etherscan.io/address/0xD0749876b631f29a7B8f02BBcd11eccBd895a370#code) |
-| NullCastFactory | `0x303DFB1AfE61EE450afcb45663875092d8A231A5` | [View](https://sepolia.etherscan.io/address/0x303DFB1AfE61EE450afcb45663875092d8A231A5#code) |
+| MockcUSDT | `0x5cA829c43CEE20DD6534b8666b0C5d664b89fbd4` | [View](https://sepolia.etherscan.io/address/0x5cA829c43CEE20DD6534b8666b0C5d664b89fbd4#code) |
+| OracleMock | `0xbd185c4cFDE229F8C631D002CaD95EF62252456d` | [View](https://sepolia.etherscan.io/address/0xbd185c4cFDE229F8C631D002CaD95EF62252456d#code) |
+| ReputationGate | `0xe05B752FAef75f76a32168F42bB7B8DFd75a7773` | [View](https://sepolia.etherscan.io/address/0xe05B752FAef75f76a32168F42bB7B8DFd75a7773#code) |
+| NullCastFactory | `0xAa59241db65114aCF822475A8A42a079AE455a4e` | [View](https://sepolia.etherscan.io/address/0xAa59241db65114aCF822475A8A42a079AE455a4e#code) |
 
 ### Demo Markets
 
 | Market | Address | Type |
 |---|---|---|
-| BTC above $90k on Apr 30? | `0xD50aA290A6Ba5623A1583705aaA3c7E892297505` | Binary |
-| ETH above $2k on May 5? | `0x30D95077456a6c00b89295a2cee081a3C5C30aF9` | Binary |
-| BTC price range May 10 | `0x1fd7597916872Db43275BFA90Efd118c82C5473d` | Scalar (3 buckets) |
+| BTC above $90k on Apr 30? | `0x639abd60524491a21422C710fE762D624282a1d3` | Binary |
+| ETH above $2k on May 5? | `0x73216fF89B18BA6E98E87Bae19112e9de047D077` | Binary |
+| BTC price range May 10 | `0x4DbCe10FB733cEE4640cd76E12686ac2F8066072` | Scalar (3 buckets) |
 
 ---
 
@@ -113,6 +113,12 @@ npx hardhat run scripts/deploy.ts --network sepolia
 
 # Seed demo markets
 npx hardhat run scripts/createDemoMarkets.ts --network sepolia
+
+# Keeper: update odds (run periodically)
+npx hardhat run scripts/oddsKeeper.ts --network sepolia
+
+# Keeper: compute reputation scores (run per epoch)
+npx hardhat run scripts/computeScores.ts --network sepolia
 ```
 
 ### Frontend
