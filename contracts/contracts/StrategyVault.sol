@@ -159,6 +159,7 @@ contract StrategyVault is ZamaEthereumConfig, ReentrancyGuard {
             _totalShares = newShares;
         }
         FHE.allowThis(_totalShares);
+        FHE.makePubliclyDecryptable(_totalShares);
 
         // Track cost basis for fee calculation
         if (FHE.isInitialized(_costBasis[msg.sender])) {
