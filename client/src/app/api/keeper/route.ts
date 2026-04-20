@@ -7,9 +7,10 @@ import { CONTRACT_ADDRESSES } from "@/constants/addresses";
 const rpcUrl =
   process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL ||
   "https://ethereum-sepolia-rpc.publicnode.com";
-const deployerKey = process.env.DEPLOYER_PRIVATE_KEY as
-  | `0x${string}`
-  | undefined;
+const rawKey = process.env.DEPLOYER_PRIVATE_KEY;
+const deployerKey = rawKey
+  ? (rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`) as `0x${string}`
+  : undefined;
 
 const RELAYER_URL = "https://relayer.testnet.zama.org/v2";
 
