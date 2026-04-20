@@ -100,9 +100,15 @@ export function useUserDecrypt(marketAddress: `0x${string}`) {
       );
 
       // Step 3: Sign with the user's wallet
+      // Derive primaryType from types — it's the non-EIP712Domain key
+      const primaryType =
+        eip712.primaryType ||
+        Object.keys(eip712.types).find((k) => k !== "EIP712Domain") ||
+        "UserDecryptRequestVerification";
+
       const signature = await signTypedDataAsync({
         types: eip712.types as Record<string, Array<{ name: string; type: string }>>,
-        primaryType: eip712.primaryType as string,
+        primaryType,
         domain: eip712.domain as {
           name: string;
           version: string;
