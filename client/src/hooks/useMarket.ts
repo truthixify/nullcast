@@ -3,6 +3,7 @@
 import { useReadContract, useReadContracts } from "wagmi";
 import { hexToString } from "viem";
 import { getMarketConfig } from "@/lib/contracts";
+import { useOdds } from "@/hooks/useOdds";
 
 interface UseMarketOptions {
   refetchInterval?: number;
@@ -65,13 +66,22 @@ export function useMarket(marketAddress: `0x${string}`, options?: UseMarketOptio
     query: { enabled: !!lpPoolAddress, refetchInterval: 10_000 },
   });
 
-  const yesPool = publicYesPool ? Number(publicYesPool) / 1e6 : 0;
-  const noPool = publicNoPool ? Number(publicNoPool) / 1e6 : 0;
+  // Fetch live odds from /api/odds (decrypts encrypted pool totals via relayer)
+  // Fetches once on mount, then only on explicit refreshOdds() call
+  const liveOdds = useOdds(marketAddress);
+
+  // Use live decrypted odds if available, fall back to on-chain publicYesPool/publicNoPool
+  const yesPool = liveOdds.yesPool > 0 ? liveOdds.yesPool : (publicYesPool ? Number(publicYesPool) / 1e6 : 0);
+  const noPool = liveOdds.noPool > 0 ? liveOdds.noPool : (publicNoPool ? Number(publicNoPool) / 1e6 : 0);
   const bettingPool = yesPool + noPool;
   const lpPool = lpTotalLiquidity ? Number(lpTotalLiquidity) / 1e6 : 0;
   const totalPool = bettingPool + lpPool;
-  const yesOdds = bettingPool > 0 ? Math.round((yesPool / bettingPool) * 100) : 50;
+  const yesOdds = liveOdds.totalBettingPool > 0 ? liveOdds.yesOdds : (bettingPool > 0 ? Math.round((yesPool / bettingPool) * 100) : 50);
   const noOdds = 100 - yesOdds;
+
+  const refreshOdds = liveOdds.refresh;
+  // Odds are "ready" if we got data from /api/odds OR if on-chain pools have values
+  const isOddsLoading = liveOdds.isLoading && liveOdds.totalBettingPool === 0 && !publicYesPool && !publicNoPool;
 
   return {
     question,
@@ -96,8 +106,10 @@ export function useMarket(marketAddress: `0x${string}`, options?: UseMarketOptio
     yesOdds,
     noOdds,
     isLoading,
+    isOddsLoading,
     error,
     refetch,
+    refreshOdds,
   };
 }
 

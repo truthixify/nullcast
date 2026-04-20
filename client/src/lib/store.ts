@@ -59,3 +59,35 @@ export const useNullCastStore = create<NullCastStore>()(
     }
   )
 );
+
+/* ── Global Odds Store ──────────────────────────────────────────── */
+
+export interface OddsData {
+  yesPool: number;
+  noPool: number;
+  totalBettingPool: number;
+  yesOdds: number;
+  noOdds: number;
+}
+
+interface OddsStore {
+  // market address (lowercase) -> odds data
+  odds: Record<string, OddsData>;
+  // tracks which markets are currently being fetched
+  fetching: Record<string, boolean>;
+  setOdds: (market: string, data: OddsData) => void;
+  setFetching: (market: string, val: boolean) => void;
+}
+
+export const useOddsStore = create<OddsStore>()((set) => ({
+  odds: {},
+  fetching: {},
+  setOdds: (market, data) =>
+    set((state) => ({
+      odds: { ...state.odds, [market.toLowerCase()]: data },
+    })),
+  setFetching: (market, val) =>
+    set((state) => ({
+      fetching: { ...state.fetching, [market.toLowerCase()]: val },
+    })),
+}));
