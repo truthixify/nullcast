@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useAccount, useReadContract } from "wagmi";
 import {
@@ -207,24 +207,31 @@ export default function MarketDetailPage({
   const isBetWriting = bet.isWriting;
   const isBetConfirming = bet.isConfirming;
 
-  // When bet is confirmed, track in Zustand and trigger odds update
-  if (isBetConfirmed && betStep === "confirming" && hasAddress && resolvedAddress) {
-    addPosition({
-      marketAddress: resolvedAddress,
-      side,
-      amount: amountNum,
-      revealed: false,
-      entryOdds: selectedPct,
-      txHash: bet.hash,
-    });
-    setBetStep("confirmed");
+  // Track bet confirmation in useEffect to avoid render-phase setState
+  const prevBetConfirmed = useRef(false);
+  useEffect(() => {
+    if (isBetConfirmed && !prevBetConfirmed.current && betStep === "confirming" && hasAddress && resolvedAddress) {
+      prevBetConfirmed.current = true;
+      addPosition({
+        marketAddress: resolvedAddress,
+        side,
+        amount: amountNum,
+        revealed: false,
+        entryOdds: selectedPct,
+        txHash: bet.hash,
+      });
+      setBetStep("confirmed");
 
-    // Trigger odds keeper to decrypt and submit updated pool totals
-    oddsKeeper.updateOdds();
+      // Trigger odds keeper to decrypt and submit updated pool totals
+      oddsKeeper.updateOdds();
 
-    // Refetch market data after a short delay for the odds update tx to land
-    setTimeout(() => market.refetch(), 15_000);
-  }
+      // Refetch market data after a delay for the odds update tx to land
+      setTimeout(() => market.refetch(), 15_000);
+    }
+    if (!isBetConfirmed) {
+      prevBetConfirmed.current = false;
+    }
+  }, [isBetConfirmed, betStep, hasAddress, resolvedAddress, side, amountNum, selectedPct, bet.hash, addPosition, oddsKeeper, market]);
 
   /* ── Claim handler ──────────────────────────────────────────── */
   const handleClaim = useCallback(() => {

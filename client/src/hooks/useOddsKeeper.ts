@@ -36,9 +36,20 @@ export function useOddsKeeper(marketAddress: `0x${string}`) {
   const { isLoading: isConfirming, isSuccess: isConfirmed } =
     useWaitForTransactionReceipt({ hash: txHash });
 
+  const ZERO_HANDLE = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
   const updateOdds = useCallback(async () => {
     if (!yesHandle || !noHandle) {
       setError("Pool handles not available yet");
+      return;
+    }
+
+    const yesHandleHex = yesHandle as `0x${string}`;
+    const noHandleHex = noHandle as `0x${string}`;
+
+    // No bets placed yet — pools are uninitialized (zero handles)
+    if (yesHandleHex === ZERO_HANDLE && noHandleHex === ZERO_HANDLE) {
+      setError("No bets placed yet — pools are empty");
       return;
     }
 
@@ -63,9 +74,6 @@ export function useOddsKeeper(marketAddress: `0x${string}`) {
         },
         getChainId: async () => SepoliaConfig.chainId,
       });
-
-      const yesHandleHex = yesHandle as `0x${string}`;
-      const noHandleHex = noHandle as `0x${string}`;
 
       // Ask KMS to decrypt the publicly-decryptable pool handles
       const result = await relayer.publicDecrypt([yesHandleHex, noHandleHex]);
