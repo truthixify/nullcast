@@ -890,11 +890,23 @@ hr.divider { border: 0; margin: 0; }
   }
   .mobile-nav a.active { color: var(--gold); }
   .top-bar-search { display: none; }
+  .top-bar-network { display: none !important; }
+  .top-bar-wallet { display: block; }
+  .top-bar { justify-content: flex-end; padding: 0 16px; }
   .page-container { padding-left: 20px !important; padding-right: 20px !important; padding-bottom: 90px !important; }
   .detail-grid { grid-template-columns: 1fr !important; gap: 24px !important; }
   .detail-grid aside { position: static !important; }
-  .stats-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+  .stats-grid-4 { grid-template-columns: repeat(2, 1fr) !important; gap: 16px !important; }
   .ticker-track { animation-duration: 30s; }
+
+  /* Vault/LP grids: single column on mobile */
+  [style*="grid-template-columns: repeat(auto-fill"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Portfolio table: horizontal scroll */
+  .portfolio-table { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .portfolio-table > div:not(:first-child) { min-width: 600px; }
 
   /* old pages also need mobile padding */
   .page { padding-bottom: 110px; }

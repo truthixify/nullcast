@@ -3,6 +3,55 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+
+function WalletButton() {
+  return (
+    <ConnectButton.Custom>
+      {({ account, chain, openAccountModal, openConnectModal, mounted }) => {
+        const connected = mounted && account && chain;
+        return (
+          <button
+            onClick={connected ? openAccountModal : openConnectModal}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "8px 12px",
+              borderRadius: 4,
+              border: "1px solid var(--line-2)",
+              background: connected ? "transparent" : "var(--gold)",
+              color: connected ? "var(--ink-1)" : "#1A1511",
+              fontSize: 12,
+              fontFamily: "var(--f-mono)",
+              cursor: "pointer",
+              transition: "border-color 200ms, background 200ms",
+              width: "100%",
+            }}
+          >
+            {connected ? (
+              <>
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "var(--yes)",
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {account.displayName}
+                </span>
+              </>
+            ) : (
+              <span style={{ fontWeight: 500 }}>Connect</span>
+            )}
+          </button>
+        );
+      }}
+    </ConnectButton.Custom>
+  );
+}
 import { NullCastMark, Icon, FHEBadge } from "./Icons";
 import { PulseDot } from "./PulseDot";
 
@@ -58,7 +107,7 @@ export function Sidebar() {
 
       {/* Account chip */}
       <div className="account-chip">
-        <ConnectButton />
+        <WalletButton />
       </div>
     </aside>
   );
@@ -74,19 +123,24 @@ export function TopBar() {
         </span>
         <span className="kbd">&#8984;K</span>
       </button>
-      <span
-        className="mono"
-        style={{
-          fontSize: 11,
-          color: "var(--ink-2)",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
-        <PulseDot color="var(--yes)" />
-        <span>Sepolia</span>
-      </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <span
+          className="mono top-bar-network"
+          style={{
+            fontSize: 11,
+            color: "var(--ink-2)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <PulseDot color="var(--yes)" />
+          <span>Sepolia</span>
+        </span>
+        <div className="top-bar-wallet">
+          <WalletButton />
+        </div>
+      </div>
     </div>
   );
 }
@@ -157,7 +211,7 @@ export function Header() {
           <div className="header-meta">
             <FHEBadge>FHE &middot; Sepolia</FHEBadge>
           </div>
-          <ConnectButton />
+          <WalletButton />
         </div>
       </header>
 
