@@ -417,6 +417,9 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   background: none;
 }
 
+/* Wallet button: hidden on desktop (sidebar has it), shown on mobile */
+.top-bar-wallet { display: none; }
+
 /* ========================== backward-compat: old header ========================== */
 
 .site-header {
@@ -891,7 +894,7 @@ hr.divider { border: 0; margin: 0; }
   .mobile-nav a.active { color: var(--gold); }
   .top-bar-search { display: none; }
   .top-bar-network { display: none !important; }
-  .top-bar-wallet { display: block; }
+  .top-bar-wallet { display: block !important; }
   .top-bar { justify-content: flex-end; padding: 0 16px; }
   .page-container { padding-left: 20px !important; padding-right: 20px !important; padding-bottom: 90px !important; }
   .detail-grid { grid-template-columns: 1fr !important; gap: 24px !important; }

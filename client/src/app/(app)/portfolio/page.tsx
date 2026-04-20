@@ -130,7 +130,7 @@ function PositionRow({
       </span>
 
       <span className="mono" style={{ fontSize: 13, color: "var(--ink-1)" }}>
-        <CipherReveal value={displayAmount} reveal={isDecrypted || !!autoDecrypt} width={7} />
+        <CipherReveal value={displayAmount} reveal={isDecrypted && displayAmount !== "0.00"} width={7} />
       </span>
 
       <span
@@ -163,7 +163,7 @@ function PositionRow({
         }}
       >
         {isDecrypted && pnl >= 0 ? "+" : ""}
-        <CipherReveal value={Math.abs(pnl).toFixed(2)} reveal={isDecrypted || !!autoDecrypt} width={6} />
+        <CipherReveal value={Math.abs(pnl).toFixed(2)} reveal={isDecrypted && displayAmount !== "0.00"} width={6} />
       </span>
     </div>
     {isResolved && (
