@@ -54,6 +54,19 @@ function truncAddr(addr: string): string {
   return `${addr.slice(0, 6)}\u2026${addr.slice(-4)}`;
 }
 
+function fmtExpiry(expiryBlock: bigint | undefined, currentBlock: bigint | undefined): string {
+  if (!expiryBlock) return "--";
+  if (!currentBlock) return `Block ${expiryBlock.toString()}`;
+  const diff = Number(expiryBlock) - Number(currentBlock);
+  if (diff <= 0) return "Expired";
+  const seconds = diff * 12;
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  if (days > 30) return `${Math.floor(days / 30)}mo ${days % 30}d`;
+  if (days > 0) return `${days}d ${hours}h`;
+  return `${hours}h ${Math.floor((seconds % 3600) / 60)}m`;
+}
+
 function formatPool(value: number): string {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
@@ -403,22 +416,70 @@ export default function MarketDetailPage({
 
   /* ── Live activity feed from BetPlaced events ────────────────── */
   const [activity, setActivity] = useState<Array<{ side: string; addr: string; block: string; mine: boolean }>>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
 
+  // Auto-sync odds on page load
+  const hasSynced = useRef(false);
+  useEffect(() => {
+    if (hasAddress && !hasSynced.current) {
+      hasSynced.current = true;
+      fetch("/api/keeper").then(() => {
+        setTimeout(() => market.refetch(), 5000);
+      }).catch(() => {});
+    }
+  }, [hasAddress, market]);
+
+  const handleSyncOdds = async () => {
+    setIsSyncing(true);
+    try {
+      await fetch("/api/keeper");
+      setTimeout(() => market.refetch(), 5000);
+    } catch { /* ignore */ }
+    setIsSyncing(false);
+  };
+
+  const betPlacedAbi = [{ type: "event" as const, name: "BetPlaced", inputs: [{ name: "bettor", type: "address", indexed: true }, { name: "marketId", type: "uint256", indexed: true }, { name: "isYes", type: "bool", indexed: false }] }];
+
+  // Watch for new events
   useWatchContractEvent({
     address: hasAddress ? resolvedAddress : undefined,
-    abi: [{ type: "event", name: "BetPlaced", inputs: [{ name: "bettor", type: "address", indexed: true }, { name: "marketId", type: "uint256", indexed: true }, { name: "isYes", type: "bool", indexed: false }] }],
+    abi: betPlacedAbi,
     eventName: "BetPlaced",
     enabled: hasAddress,
-    onLogs(logs) {
-      const newEntries = logs.map((log) => ({
+    onLogs(logs: unknown[]) {
+      const newEntries = (logs as Array<{ args: { isYes?: boolean; bettor?: string }; blockNumber?: bigint }>).map((log) => ({
         side: log.args.isYes ? "YES" : "NO",
-        addr: `${(log.args.bettor as string).slice(0, 6)}…${(log.args.bettor as string).slice(-4)}`,
+        addr: `${(log.args.bettor ?? "0x0000").slice(0, 6)}\u2026${(log.args.bettor ?? "0x0000").slice(-4)}`,
         block: log.blockNumber?.toString() ?? "--",
-        mine: log.args.bettor?.toLowerCase() === userAddress?.toLowerCase(),
+        mine: (log.args.bettor ?? "").toLowerCase() === userAddress?.toLowerCase(),
       }));
       setActivity((prev) => [...newEntries, ...prev].slice(0, 10));
     },
   });
+
+  // Fetch historical events on mount via RPC
+  useEffect(() => {
+    if (!hasAddress || !resolvedAddress) return;
+    const rpc = process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com";
+    fetch(rpc, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getLogs", params: [{ address: resolvedAddress, fromBlock: "0x0", toBlock: "latest", topics: [null] }] }),
+    }).then(r => r.json()).then(data => {
+      if (!data.result || data.result.length === 0) return;
+      const entries = data.result.slice(-10).reverse().map((log: { topics: string[]; blockNumber: string }) => {
+        const bettor = log.topics[1] ? "0x" + log.topics[1].slice(26) : "0x0000";
+        const isYes = log.topics.length > 2; // simplified
+        return {
+          side: isYes ? "YES" : "NO",
+          addr: `${bettor.slice(0, 6)}\u2026${bettor.slice(-4)}`,
+          block: parseInt(log.blockNumber, 16).toString(),
+          mine: bettor.toLowerCase() === userAddress?.toLowerCase(),
+        };
+      });
+      if (entries.length > 0) setActivity(entries);
+    }).catch(() => {});
+  }, [hasAddress, resolvedAddress, userAddress]);
 
   /* ── Resolved outcome label ──────────────────────────────────── */
   const resolvedLabel =
@@ -429,28 +490,12 @@ export default function MarketDetailPage({
         : market.resolvedOutcome?.toString() ?? "--";
 
   /* ── Position display value for CipherReveal ─────────────────── */
-  const positionValueStr = useMemo(() => {
-    if (!userDecrypt.isDecrypted) return "0.00";
-    const yesVal = userDecrypt.yesAmount
-      ? Number(userDecrypt.yesAmount) / 1e6
-      : 0;
-    const noVal = userDecrypt.noAmount
-      ? Number(userDecrypt.noAmount) / 1e6
-      : 0;
-    const total = yesVal + noVal;
-    return total.toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  }, [userDecrypt.isDecrypted, userDecrypt.yesAmount, userDecrypt.noAmount]);
-
-  const positionSide = useMemo(() => {
-    if (!userDecrypt.isDecrypted) return "YES";
-    const yesVal = userDecrypt.yesAmount
-      ? Number(userDecrypt.yesAmount)
-      : 0;
-    const noVal = userDecrypt.noAmount ? Number(userDecrypt.noAmount) : 0;
-    return yesVal >= noVal ? "YES" : "NO";
+  const positionData = useMemo(() => {
+    if (!userDecrypt.isDecrypted) return { yes: 0, no: 0, total: "0.00" };
+    const yes = userDecrypt.yesAmount ? Number(userDecrypt.yesAmount) / 1e6 : 0;
+    const no = userDecrypt.noAmount ? Number(userDecrypt.noAmount) / 1e6 : 0;
+    const total = (yes + no).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return { yes, no, total };
   }, [userDecrypt.isDecrypted, userDecrypt.yesAmount, userDecrypt.noAmount]);
 
   /* ── Error / loading states ──────────────────────────────────── */
@@ -753,13 +798,27 @@ export default function MarketDetailPage({
               <span style={{ color: "var(--ink-3)", fontSize: 11 }}>
                 pool
               </span>
+              <button
+                onClick={handleSyncOdds}
+                disabled={isSyncing}
+                className="mono"
+                style={{
+                  fontSize: 10,
+                  color: isSyncing ? "var(--ink-4)" : "var(--gold-dim)",
+                  padding: "2px 6px",
+                  border: "1px solid var(--line)",
+                  borderRadius: 3,
+                  cursor: isSyncing ? "default" : "pointer",
+                  background: "transparent",
+                }}
+              >
+                {isSyncing ? "syncing" : "sync"}
+              </button>
             </span>
             <span style={{ color: "var(--ink-4)" }}>&middot;</span>
             <span>
               <span style={{ color: "var(--ink-1)" }}>
-                {market.expiryBlock
-                  ? market.expiryBlock.toString()
-                  : "--"}
+                {fmtExpiry(market.expiryBlock, currentBlock ?? undefined)}
               </span>
               <span
                 style={{
@@ -798,63 +857,25 @@ export default function MarketDetailPage({
                 Your position
               </span>
               {userDecrypt.isDecrypted ? (
-                <>
-                  <span
-                    className="mono"
-                    style={{
-                      fontSize: 13,
-                      color:
-                        positionSide === "YES"
-                          ? "var(--yes)"
-                          : "var(--no)",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {positionSide}
-                  </span>
-                  <span
-                    className="mono"
-                    style={{
-                      fontSize: 14,
-                      color: "var(--ink-1)",
-                      minWidth: 120,
-                    }}
-                  >
-                    <CipherReveal
-                      value={positionValueStr}
-                      reveal={positionReveal}
-                      width={8}
-                    />
-                    <span
-                      style={{
-                        color: "var(--ink-3)",
-                        marginLeft: 6,
-                        fontSize: 11,
-                      }}
-                    >
-                      cUSDT
+                <span style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                  {positionData.yes > 0 && (
+                    <span className="mono" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ color: "var(--yes)", fontWeight: 500 }}>YES</span>
+                      <CipherReveal value={positionData.yes.toFixed(2)} reveal={positionReveal} width={7} />
                     </span>
-                  </span>
-                </>
+                  )}
+                  {positionData.no > 0 && (
+                    <span className="mono" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ color: "var(--no)", fontWeight: 500 }}>NO</span>
+                      <CipherReveal value={positionData.no.toFixed(2)} reveal={positionReveal} width={7} />
+                    </span>
+                  )}
+                  <span style={{ color: "var(--ink-3)", fontSize: 11 }}>cUSDT</span>
+                </span>
               ) : (
-                <span
-                  className="mono"
-                  style={{
-                    fontSize: 14,
-                    color: "var(--ink-3)",
-                    minWidth: 120,
-                  }}
-                >
+                <span className="mono" style={{ fontSize: 14, color: "var(--ink-3)" }}>
                   {"\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"}
-                  <span
-                    style={{
-                      color: "var(--ink-3)",
-                      marginLeft: 6,
-                      fontSize: 11,
-                    }}
-                  >
-                    cUSDT
-                  </span>
+                  <span style={{ color: "var(--ink-3)", marginLeft: 6, fontSize: 11 }}>cUSDT</span>
                 </span>
               )}
               <div style={{ flex: 1 }} />
@@ -1492,6 +1513,8 @@ export default function MarketDetailPage({
                         style={{
                           fontSize: 12,
                           color: "var(--ink-3)",
+                          flexShrink: 0,
+                          paddingLeft: 8,
                         }}
                       >
                         cUSDT

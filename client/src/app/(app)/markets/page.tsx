@@ -2,10 +2,24 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useBlockNumber } from "wagmi";
 import { useFactoryMarkets } from "@/hooks/useFactory";
 import { useMarket } from "@/hooks/useMarket";
 import { OddsBar } from "@/components/shared/OddsBar";
 import { GlowCard } from "@/components/shared/GlowCard";
+
+function fmtExpiry(expiryBlock: bigint | undefined, currentBlock: bigint | undefined): string {
+  if (!expiryBlock) return "--";
+  if (!currentBlock) return `Block ${expiryBlock.toString()}`;
+  const diff = Number(expiryBlock) - Number(currentBlock);
+  if (diff <= 0) return "Expired";
+  const seconds = diff * 12;
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  if (days > 30) return `${Math.floor(days / 30)}mo ${days % 30}d`;
+  if (days > 0) return `${days}d ${hours}h`;
+  return `${hours}h ${Math.floor((seconds % 3600) / 60)}m`;
+}
 
 /* ── Constants ────────────────────────────────────────────── */
 
@@ -45,6 +59,7 @@ function MarketCard({
   address: `0x${string}`;
   onClick: () => void;
 }) {
+  const { data: currentBlock } = useBlockNumber();
   const {
     question,
     status,
@@ -152,7 +167,7 @@ function MarketCard({
         <span>{formatCUSDT(totalPool)} pool</span>
         <span style={{ color: "var(--ink-4)" }}>&middot;</span>
         <span>
-          Block {expiryBlock ? expiryBlock.toString() : "---"}
+          {fmtExpiry(expiryBlock, currentBlock ?? undefined)}
         </span>
         {resolved && (
           <>
