@@ -348,7 +348,7 @@ export default function ReputationPage() {
         {/* Main content */}
         {!isRepLoading && (
           <>
-          <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: 24 }}>
+          <div className="rep-grid" style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: 24 }}>
             {/* Left: score gauge */}
             <div className="card elevated">
               <div

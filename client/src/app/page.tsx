@@ -83,7 +83,7 @@ export default function LandingPage() {
       {/* ── Hero ──────────────────────────────────────────── */}
       <section style={{ paddingTop: 40 }}>
         <div className="container">
-          <div style={{
+          <div className="landing-hero-grid" style={{
             display: "grid",
             gridTemplateColumns: "1.25fr 1fr",
             gap: 48,
@@ -96,7 +96,7 @@ export default function LandingPage() {
                 <span className="pill">v0.1.0</span>
               </div>
 
-              <h1 className="display" style={{ fontSize: 72, color: "var(--t-1)" }}>
+              <h1 className="display" style={{ fontSize: "clamp(40px, 8vw, 72px)", color: "var(--t-1)" }}>
                 Bet without revealing.
               </h1>
 

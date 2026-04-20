@@ -615,3 +615,150 @@ hr.divider { border: 0; margin: 0; }
 .tweak-sw.amber { background: #ffb547; }
 .tweak-sw.blue  { background: #5ea0ff; }
 .tweak-sw.cyan  { background: #4dd0cc; }
+
+/* ========================== mobile responsive ========================== */
+
+/* Tablet: ≤980px */
+@media (max-width: 980px) {
+  /* Header: shrink spacing */
+  .site-header .row { gap: var(--s-3); }
+  .nav { margin-left: 4px; gap: 0; }
+  .nav a { padding: 6px 8px; font-size: 12px; }
+  .header-meta { display: none; }
+
+  /* Page heads */
+  .page-head h1 { font-size: 32px; }
+
+  /* Detail page: stack columns */
+  .detail-2col {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+  }
+  .detail-2col > *:last-child {
+    position: static !important;
+    top: auto !important;
+  }
+
+  /* Reputation 2-col */
+  .rep-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Mobile: ≤640px */
+@media (max-width: 640px) {
+  :root { --pad-x: 16px; --header-h: 56px; }
+
+  /* Header: compact */
+  .site-header .row { gap: var(--s-2); }
+  .brand { font-size: 15px; gap: 8px; }
+  .brand .mark svg { width: 18px; height: 18px; }
+  .nav { display: none; }
+
+  /* Mobile nav: show bottom tab bar */
+  .mobile-nav {
+    display: flex !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    background: color-mix(in srgb, var(--bg-0) 92%, transparent);
+    backdrop-filter: saturate(140%) blur(14px);
+    -webkit-backdrop-filter: saturate(140%) blur(14px);
+    border-top: 1px solid var(--border-1);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    justify-content: space-around;
+  }
+  .mobile-nav a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 12px;
+    border-radius: var(--r-md);
+    font-size: 10px;
+    color: var(--t-3);
+    text-decoration: none;
+    transition: color .15s;
+  }
+  .mobile-nav a.active { color: var(--acc); }
+  .mobile-nav a:hover { color: var(--t-1); }
+
+  /* Page needs bottom padding for tab bar */
+  .page { padding-bottom: 100px; }
+
+  /* Page heads */
+  .page-head h1 { font-size: 26px; }
+  .page-head .sub { font-size: 12px; }
+
+  /* Buttons */
+  .btn.lg { height: 44px; font-size: 13px; }
+
+  /* Cards */
+  .card-body { padding: 14px; }
+  .card-head { padding: 12px 14px; }
+
+  /* Tables: horizontal scroll */
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .table { min-width: 600px; }
+  .table th, .table td { padding: 10px 10px; font-size: 12px; }
+
+  /* Row wrapping on mobile */
+  .row.between { flex-wrap: wrap; gap: 12px; }
+
+  /* Stats grid */
+  .grid-4 { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+
+  /* Market card question */
+  .card.inter h3 { font-size: 15px !important; min-height: auto !important; }
+
+  /* Odds bar */
+  .odds .yes-pct, .odds .no-pct { font-size: 12px; }
+
+  /* Footer */
+  .site-footer { padding-bottom: calc(20px + 60px); } /* above tab bar */
+  .site-footer .row { flex-wrap: wrap; gap: 10px; justify-content: center; text-align: center; }
+
+  /* Landing hero */
+  .landing-hero-grid {
+    grid-template-columns: 1fr !important;
+    gap: 32px !important;
+  }
+  .landing-hero-grid h1 { font-size: 48px !important; }
+  .landing-hero-grid .hero-card { max-width: 100% !important; }
+
+  /* Landing stats */
+  .landing-stats {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .landing-stats > div { border-left: none !important; border-bottom: 1px solid var(--border-1); }
+
+  /* Seg controls */
+  .seg button { padding: 0 8px; font-size: 11px; }
+
+  /* Input row */
+  .input-row .unit { padding: 0 8px; font-size: 11px; }
+
+  /* Payout box text */
+  .payout-box { font-size: 12px !important; }
+
+  /* Hide kbd shortcuts on mobile */
+  .kbd { display: none; }
+
+  /* Encrypted value */
+  .enc-val { font-size: 12px; }
+
+  /* Eyebrow text */
+  .eyebrow { font-size: 10px; }
+
+  /* Pill */
+  .pill { height: 20px; padding: 0 8px; font-size: 10px; }
+
+  /* Toast above tab bar */
+  .toast-wrap { bottom: 80px; right: 12px; left: 12px; }
+  .toast { min-width: auto; }
+}

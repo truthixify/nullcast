@@ -421,6 +421,7 @@ export default function MarketDetailPage({
   return (
     <div className="container" style={{ paddingTop: 28, paddingBottom: 80 }}>
       <div
+        className="detail-2col"
         style={{
           display: "grid",
           gridTemplateColumns: "minmax(0,1fr) 380px",
