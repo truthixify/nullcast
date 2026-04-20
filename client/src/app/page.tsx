@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { FHEBadge, LockIcon } from "@/components/shared/Icons";
 import { OddsBar } from "@/components/shared/OddsBar";
+import { Header } from "@/components/shared/Header";
+import { Footer } from "@/components/shared/Footer";
 
 /* ── LiveMarketCard ────────────────────────────────────────── */
 function LiveMarketCard() {
@@ -75,9 +77,11 @@ function LiveMarketCard() {
 /* ── LandingPage ───────────────────────────────────────────── */
 export default function LandingPage() {
   return (
-    <div className="app">
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      <Header />
+      <main style={{ flex: 1 }}>
       {/* ── Hero ──────────────────────────────────────────── */}
-      <section style={{ paddingTop: 80 }}>
+      <section style={{ paddingTop: 40 }}>
         <div className="container">
           <div style={{
             display: "grid",
@@ -172,6 +176,8 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+      </main>
+      <Footer />
     </div>
   );
 }

@@ -4,7 +4,7 @@
 
 NullCast is the first fully confidential prediction market protocol built on **Fully Homomorphic Encryption (FHE)**. Using [Zama's FHEVM](https://docs.zama.ai/fhevm) on Ethereum Sepolia, NullCast enables users to place bets on real-world and crypto outcomes while keeping individual position sizes **completely private** — even from the protocol itself.
 
-**Built for:** Zama Developer Program Season 2 — Builder Track + OpenBuild APAC Track
+**Built for:** Zama Developer Program Season 2 — Builder Track 
 
 ---
 
@@ -265,5 +265,5 @@ MIT
 
 ---
 
-*NullCast — Confidential Finance Track | Builder Track + OpenBuild APAC*
+*NullCast — Confidential Finance Track | Builder Track*
 *Deployed on Ethereum Sepolia | Powered by Zama FHEVM*

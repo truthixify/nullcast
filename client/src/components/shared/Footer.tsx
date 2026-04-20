@@ -13,19 +13,10 @@ export function Footer() {
             </span>{" "}
             nullcast
           </span>
-          <span className="mono" style={{ color: "var(--t-4)" }}>
-            v0.4.2
-          </span>
         </div>
         <div className="row">
           <a className="link" href="#">
-            Docs
-          </a>
-          <a className="link" href="#">
             GitHub
-          </a>
-          <a className="link" href="#">
-            Discord
           </a>
           <span className="pill enc">
             <LockIcon size={10} /> Built on Zama fhEVM

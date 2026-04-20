@@ -5,7 +5,7 @@
 
 **Built on:** Zama Protocol (FHEVM) | **Network:** Ethereum Sepolia Testnet  
 **Currency:** cUSDT (ERC-7984 Confidential USDT)  
-**Submission:** Zama Developer Program Season 2 — Builder Track + OpenBuild APAC Track
+**Submission:** Zama Developer Program Season 2 — Builder Track 
 
 ---
 
@@ -1226,7 +1226,7 @@ nullcast/
 - [ ] Write comprehensive README
 - [ ] Record 3-minute demo video
 - [ ] Final testing on Sepolia
-- [ ] Submit to Builder Track + OpenBuild APAC Track
+- [ ] Submit to Builder Track 
 
 ---
 
@@ -1325,5 +1325,5 @@ nullcast/
 ---
 
 *NullCast — Built for Zama Developer Program Season 2*  
-*Confidential Finance Track | Builder Track + OpenBuild APAC*  
+*Confidential Finance Track | Builder Track*  
 *Deployed on Ethereum Sepolia | Powered by Zama FHEVM*

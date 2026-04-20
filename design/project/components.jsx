@@ -185,9 +185,7 @@ const Footer = () => (
         <span className="mono" style={{color:"var(--t-4)"}}>v0.4.2</span>
       </div>
       <div className="row">
-        <a className="link">Docs</a>
         <a className="link">GitHub</a>
-        <a className="link">Discord</a>
         <span className="pill enc"><Icon.Lock size={10}/> Built on Zama fhEVM</span>
       </div>
     </div>
