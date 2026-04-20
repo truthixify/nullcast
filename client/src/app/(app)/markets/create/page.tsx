@@ -6,11 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAccount, useBlockNumber } from "wagmi";
 import { stringToHex } from "viem";
 import { useCreateMarket } from "@/hooks/useFactory";
-import {
-  ChevronIcon,
-  CheckIcon,
-  ExternalIcon,
-} from "@/components/shared/Icons";
+import { Icon } from "@/components/shared/Icons";
 
 const CATEGORY_OPTIONS = ["CRYPTO", "MACRO", "EQUITY", "SPORTS", "TECH", "OTHER"] as const;
 
@@ -33,32 +29,45 @@ function TypeTile({
   return (
     <button
       type="button"
-      className="card inter"
       onClick={onClick}
       disabled={disabled}
       style={{
         flex: 1,
-        padding: "16px",
+        padding: 16,
         textAlign: "left",
         cursor: disabled ? "not-allowed" : "pointer",
-        background: active ? "var(--acc-bg)" : undefined,
-        borderColor: active ? "var(--acc-bd)" : undefined,
+        background: active ? "rgba(212,168,67,0.08)" : "transparent",
+        border: `1px solid ${active ? "var(--gold-dim)" : "var(--line-2)"}`,
+        borderRadius: 3,
       }}
     >
       <div
-        className="display"
+        className="serif"
         style={{
           fontSize: 16,
-          color: active ? "var(--acc)" : "var(--t-1)",
+          fontWeight: 500,
+          color: active ? "var(--gold)" : "var(--ink-1)",
           marginBottom: 4,
         }}
       >
         {title}
       </div>
-      <div style={{ fontSize: 12, color: "var(--t-3)" }}>{sub}</div>
+      <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{sub}</div>
     </button>
   );
 }
+
+/* ── Shared input style ─────────────────────────────────────────── */
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "10px 12px",
+  fontSize: 14,
+  background: "transparent",
+  border: "1px solid var(--line-2)",
+  borderRadius: 3,
+  color: "var(--ink-1)",
+  outline: "none",
+};
 
 export default function CreateMarketPage() {
   const router = useRouter();
@@ -122,258 +131,263 @@ export default function CreateMarketPage() {
         : "idle";
 
   return (
-    <div className="page">
-      <div className="container" style={{ maxWidth: 720 }}>
-        {/* Back */}
-        <Link href="/markets" className="btn ghost sm" style={{ marginBottom: 24 }}>
-          <ChevronIcon size={12} direction="left" />
-          All markets
-        </Link>
+    <div className="page-in" style={{ maxWidth: 720, margin: "0 auto", padding: "44px 48px 80px" }}>
+      {/* Back */}
+      <Link
+        href="/markets"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          fontSize: 12,
+          color: "var(--ink-3)",
+          marginBottom: 24,
+          textDecoration: "none",
+        }}
+      >
+        <Icon name="chevron-left" size={12} />
+        All markets
+      </Link>
 
-        {/* Page head */}
-        <div className="page-head" style={{ padding: 0, marginBottom: 32 }}>
-          <h1 style={{ fontSize: 36 }}>Create market</h1>
-          <p className="sub">
-            Deploy a new prediction market to Sepolia. Resolves via oracle.
-          </p>
+      {/* Page head */}
+      <h1 className="serif" style={{ fontSize: 38, fontWeight: 500, letterSpacing: "-0.02em", marginBottom: 32 }}>
+        Create market
+      </h1>
+
+      {/* Form */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        {/* Question */}
+        <div>
+          <label className="mono" style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--ink-3)", display: "block", marginBottom: 6 }}>
+            Market question *
+          </label>
+          <input
+            type="text"
+            placeholder="Will [event] happen by [date]?"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            disabled={txState !== "idle"}
+            style={inputStyle}
+          />
+          <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)", marginTop: 4, display: "block" }}>
+            Write a clear yes/no question. Ambiguous questions may be disputed.
+          </span>
         </div>
 
-        {/* Form */}
-        <div className="card elevated" style={{ overflow: "hidden" }}>
-              <div className="card-body" style={{ padding: 24 }}>
-                <div className="stack gap-6">
-                  {/* Question */}
-                  <div className="field">
-                    <label>Market question *</label>
-                    <input
-                      type="text"
-                      className="input lg"
-                      placeholder="Will [event] happen by [date]?"
-                      value={question}
-                      onChange={(e) => setQuestion(e.target.value)}
-                      disabled={txState !== "idle"}
-                    />
-                    <span className="hint">
-                      Write a clear yes/no question. Ambiguous questions may be disputed.
-                    </span>
-                  </div>
+        {/* Market type */}
+        <div>
+          <label className="mono" style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--ink-3)", display: "block", marginBottom: 6 }}>
+            Market type
+          </label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <TypeTile
+              title="Binary"
+              sub="Yes or No outcome"
+              active={marketType === "binary"}
+              disabled={txState !== "idle"}
+              onClick={() => setMarketType("binary")}
+            />
+            <TypeTile
+              title="Scalar"
+              sub="Multiple outcome buckets"
+              active={marketType === "scalar"}
+              disabled={txState !== "idle"}
+              onClick={() => setMarketType("scalar")}
+            />
+          </div>
+        </div>
 
-                  {/* Market type */}
-                  <div className="field">
-                    <label>Market type</label>
-                    <div className="row gap-2">
-                      <TypeTile
-                        title="Binary"
-                        sub="Yes or No outcome"
-                        active={marketType === "binary"}
-                        disabled={txState !== "idle"}
-                        onClick={() => setMarketType("binary")}
-                      />
-                      <TypeTile
-                        title="Scalar"
-                        sub="Multiple outcome buckets"
-                        active={marketType === "scalar"}
-                        disabled={txState !== "idle"}
-                        onClick={() => setMarketType("scalar")}
-                      />
-                    </div>
-                  </div>
+        {/* Category */}
+        <div>
+          <label className="mono" style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--ink-3)", display: "block", marginBottom: 6 }}>
+            Category
+          </label>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {CATEGORY_OPTIONS.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setCategory(cat)}
+                disabled={txState !== "idle"}
+                className="mono"
+                style={{
+                  padding: "6px 14px",
+                  fontSize: 11,
+                  border: `1px solid ${category === cat ? "var(--gold-dim)" : "var(--line)"}`,
+                  borderRadius: 3,
+                  color: category === cat ? "var(--gold)" : "var(--ink-3)",
+                  background: category === cat ? "rgba(212,168,67,0.08)" : "transparent",
+                  cursor: "pointer",
+                }}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
 
-                  {/* Category */}
-                  <div className="field">
-                    <label>Category</label>
-                    <div className="row gap-2" style={{ flexWrap: "wrap" }}>
-                      {CATEGORY_OPTIONS.map((cat) => (
-                        <button
-                          key={cat}
-                          type="button"
-                          className={`btn sm ${category === cat ? "primary" : "ghost"}`}
-                          onClick={() => setCategory(cat)}
-                          disabled={txState !== "idle"}
-                        >
-                          {cat}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+        {/* Scalar bucket count */}
+        {marketType === "scalar" && (
+          <div>
+            <label className="mono" style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--ink-3)", display: "block", marginBottom: 6 }}>
+              Bucket count
+            </label>
+            <input
+              type="number"
+              value={bucketCount}
+              onChange={(e) => setBucketCount(e.target.value)}
+              disabled={txState !== "idle"}
+              min="2"
+              max="10"
+              step="1"
+              placeholder="3"
+              style={{ ...inputStyle, width: 120 }}
+            />
+            <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)", marginTop: 4, display: "block" }}>
+              Number of outcome buckets (2-10)
+            </span>
+          </div>
+        )}
 
-                  {/* Scalar bucket count */}
-                  {marketType === "scalar" && (
-                    <div className="field">
-                      <label>Bucket count</label>
-                      <input
-                        type="number"
-                        className="input"
-                        value={bucketCount}
-                        onChange={(e) => setBucketCount(e.target.value)}
-                        disabled={txState !== "idle"}
-                        min="2"
-                        max="10"
-                        step="1"
-                        placeholder="3"
-                      />
-                      <span className="hint">Number of outcome buckets (2-10)</span>
-                    </div>
-                  )}
+        {/* Expiry + Min bet grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div>
+            <label className="mono" style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--ink-3)", display: "block", marginBottom: 6 }}>
+              Expiry date
+            </label>
+            <input
+              type="date"
+              value={expiry}
+              onChange={(e) => setExpiry(e.target.value)}
+              disabled={txState !== "idle"}
+              min={new Date().toISOString().split("T")[0]}
+              style={{ ...inputStyle, colorScheme: "dark" }}
+            />
+            {expiryBlock && (
+              <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)", marginTop: 4, display: "block" }}>
+                Block #{expiryBlock.toString()}
+              </span>
+            )}
+          </div>
 
-                  {/* Expiry + Min bet grid */}
-                  <div className="grid-2">
-                    <div className="field">
-                      <label>Expiry date</label>
-                      <input
-                        type="date"
-                        className="input"
-                        value={expiry}
-                        onChange={(e) => setExpiry(e.target.value)}
-                        disabled={txState !== "idle"}
-                        min={new Date().toISOString().split("T")[0]}
-                        style={{ colorScheme: "dark" }}
-                      />
-                      {expiryBlock && (
-                        <span className="hint mono">
-                          Block #{expiryBlock.toString()}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="field">
-                      <label>Minimum bet</label>
-                      <div className="input-row">
-                        <input
-                          type="number"
-                          className="input"
-                          value={minimumBet}
-                          onChange={(e) => setMinimumBet(e.target.value)}
-                          disabled={txState !== "idle"}
-                          min="0.01"
-                          step="0.01"
-                          placeholder="1"
-                        />
-                        <span className="unit">cUSDT</span>
-                      </div>
-                      <span className="hint">6 decimal precision</span>
-                    </div>
-                  </div>
-
-                  {/* Info box */}
-                  <div
-                    style={{
-                      background: "var(--bg-0)",
-                      border: "1px solid var(--border-1)",
-                      borderRadius: "var(--r-md)",
-                      padding: 16,
-                    }}
-                  >
-                    <span className="eyebrow" style={{ display: "block", marginBottom: 8 }}>
-                      Before you deploy
-                    </span>
-                    <p style={{ fontSize: 12, color: "var(--t-3)", lineHeight: 1.6, margin: 0 }}>
-                      Creating a market deploys a new contract to Sepolia. You need a reputation
-                      score of 40+ and sufficient ETH for gas. The market question cannot be
-                      changed after deployment.
-                    </p>
-                  </div>
-
-                  <hr className="divider" />
-
-                  {/* Error */}
-                  {error && (
-                    <div
-                      style={{
-                        padding: "12px 16px",
-                        background: "var(--no-bg)",
-                        border: "1px solid var(--no-bd)",
-                        borderRadius: "var(--r-md)",
-                        fontSize: 13,
-                        color: "var(--no-hi)",
-                        wordBreak: "break-word",
-                      }}
-                    >
-                      {error.message?.includes("User rejected")
-                        ? "Transaction rejected by user."
-                        : error.message ?? "Transaction failed. Please try again."}
-                    </div>
-                  )}
-
-                  {/* Tx status */}
-                  {txState !== "idle" && (
-                    <div className="row gap-2" style={{ fontSize: 13 }}>
-                      {txState === "confirmed" ? (
-                        <>
-                          <CheckIcon size={14} />
-                          <span style={{ color: "var(--yes-hi)", fontWeight: 500 }}>
-                            Market created
-                          </span>
-                          {hash && (
-                            <a
-                              href={`https://sepolia.etherscan.io/tx/${hash}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="row gap-2"
-                              style={{ color: "var(--acc)", fontSize: 12 }}
-                            >
-                              Etherscan <ExternalIcon size={11} />
-                            </a>
-                          )}
-                          <span className="mono" style={{ color: "var(--t-3)", fontSize: 12 }}>
-                            Redirecting...
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span
-                            style={{
-                              width: 14,
-                              height: 14,
-                              borderRadius: "50%",
-                              border: "2px solid var(--acc)",
-                              borderTopColor: "transparent",
-                              animation: "spin 1s linear infinite",
-                              flexShrink: 0,
-                            }}
-                          />
-                          <span style={{ color: "var(--t-2)" }}>
-                            {txState === "writing"
-                              ? "Confirm in wallet..."
-                              : "Waiting for confirmation..."}
-                          </span>
-                          {hash && (
-                            <a
-                              href={`https://sepolia.etherscan.io/tx/${hash}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="row gap-2"
-                              style={{ color: "var(--acc)", fontSize: 12 }}
-                            >
-                              Etherscan <ExternalIcon size={11} />
-                            </a>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Actions */}
-                  <div className="row between">
-                    <Link href="/markets" className="btn ghost">
-                      Cancel
-                    </Link>
-                    <button
-                      className="btn primary lg"
-                      type="button"
-                      onClick={handleSubmit}
-                      disabled={!isConnected || !isFormValid || txState !== "idle"}
-                    >
-                      {!isConnected
-                        ? "Connect wallet to deploy"
-                        : txState === "idle"
-                          ? "Create Market"
-                          : "Processing..."}
-                    </button>
-                  </div>
-                </div>
-              </div>
+          <div>
+            <label className="mono" style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--ink-3)", display: "block", marginBottom: 6 }}>
+              Minimum bet
+            </label>
+            <div style={{ display: "flex", border: "1px solid var(--line-2)", borderRadius: 3, overflow: "hidden" }}>
+              <input
+                type="number"
+                value={minimumBet}
+                onChange={(e) => setMinimumBet(e.target.value)}
+                disabled={txState !== "idle"}
+                min="0.01"
+                step="0.01"
+                placeholder="1"
+                className="mono"
+                style={{
+                  flex: 1,
+                  padding: "10px 12px",
+                  fontSize: 14,
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--ink-1)",
+                  outline: "none",
+                }}
+              />
+              <span className="mono" style={{ padding: "10px 12px", fontSize: 11, color: "var(--ink-3)", display: "flex", alignItems: "center" }}>
+                cUSDT
+              </span>
             </div>
+            <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)", marginTop: 4, display: "block" }}>
+              6 decimal precision
+            </span>
+          </div>
+        </div>
+
+        {/* Separator */}
+        <div style={{ borderBottom: "1px solid var(--line)", margin: "8px 0" }} />
+
+        {/* Error */}
+        {error && (
+          <div style={{ padding: "12px 16px", border: "1px solid var(--line)", borderRadius: 3, fontSize: 13, color: "var(--no)" }}>
+            {error.message?.includes("User rejected")
+              ? "Transaction rejected by user."
+              : error.message ?? "Transaction failed. Please try again."}
+          </div>
+        )}
+
+        {/* Tx status */}
+        {txState !== "idle" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+            {txState === "confirmed" ? (
+              <>
+                <Icon name="check" size={14} color="var(--yes)" />
+                <span style={{ color: "var(--yes)", fontWeight: 500 }}>Market created</span>
+                {hash && (
+                  <a
+                    href={`https://sepolia.etherscan.io/tx/${hash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mono"
+                    style={{ color: "var(--gold)", fontSize: 12 }}
+                  >
+                    Etherscan <Icon name="external" size={11} />
+                  </a>
+                )}
+                <span className="mono" style={{ color: "var(--ink-3)", fontSize: 12 }}>Redirecting...</span>
+              </>
+            ) : (
+              <>
+                <span
+                  style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: "50%",
+                    border: "2px solid var(--gold)",
+                    borderTopColor: "transparent",
+                    animation: "spin 1s linear infinite",
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ color: "var(--ink-2)" }}>
+                  {txState === "writing" ? "Confirm in wallet..." : "Waiting for confirmation..."}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <Link
+            href="/markets"
+            style={{ fontSize: 13, color: "var(--ink-3)", textDecoration: "none" }}
+          >
+            Cancel
+          </Link>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!isConnected || !isFormValid || txState !== "idle"}
+            style={{
+              padding: "10px 24px",
+              fontSize: 13,
+              background: "var(--gold)",
+              color: "#1A1511",
+              borderRadius: 3,
+              fontWeight: 500,
+              border: "none",
+              cursor: "pointer",
+              opacity: (!isConnected || !isFormValid || txState !== "idle") ? 0.5 : 1,
+            }}
+          >
+            {!isConnected
+              ? "Connect wallet to deploy"
+              : txState === "idle"
+                ? "Create Market"
+                : "Processing..."}
+          </button>
+        </div>
       </div>
 
       <style>{`

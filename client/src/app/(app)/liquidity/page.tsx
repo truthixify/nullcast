@@ -15,25 +15,9 @@ import { useApproveCUSDT } from "@/hooks/useCUSDT";
 import { useFHEEncrypt } from "@/hooks/useFHEVM";
 import { nullCastFactoryConfig } from "@/lib/contracts";
 import { CONTRACT_ADDRESSES } from "@/constants/addresses";
-import { LockIcon, CheckIcon } from "@/components/shared/Icons";
-
-/* ── Status helpers ──────────────────────────────────────────── */
-
-const STATUS_LABELS: Record<number, string> = {
-  0: "Open",
-  1: "Expired",
-  2: "Resolving",
-  3: "Resolved",
-  4: "Cancelled",
-};
-
-const STATUS_PILL_CLASS: Record<number, string> = {
-  0: "pill open",
-  1: "pill expired",
-  2: "pill expired",
-  3: "pill resolved",
-  4: "pill cancelled",
-};
+import { Icon } from "@/components/shared/Icons";
+import { GlowCard } from "@/components/shared/GlowCard";
+import { CipherReveal } from "@/components/shared/CipherReveal";
 
 /* ── Deposit flow step type ──────────────────────────────────── */
 
@@ -46,18 +30,25 @@ type DepositStep =
   | "confirmed"
   | "error";
 
+function fmtUSD(v: number): string {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
+  return v.toFixed(2);
+}
 
 /* ── MarketLPCard — per-market liquidity card ────────────────── */
 
 function MarketLPCard({
   marketAddress,
   marketIndex,
+  reveal,
 }: {
   marketAddress: `0x${string}`;
   marketIndex: number;
+  reveal: boolean;
 }) {
   const { address: userAddress } = useAccount();
-  const { question, status, isLoading: isMarketLoading } = useMarket(marketAddress);
+  const { question, isLoading: isMarketLoading } = useMarket(marketAddress);
 
   /* ── Read pool address from factory ────────────────────────── */
   const { data: poolAddressRaw, isLoading: isPoolAddrLoading } = useReadContract({
@@ -78,37 +69,22 @@ function MarketLPCard({
 
   /* ── Is user an LP? ────────────────────────────────────────── */
   const { isLP } = useIsLP(
-    isZeroPool
-      ? ("0x0000000000000000000000000000000000000000" as `0x${string}`)
-      : poolAddress,
+    isZeroPool ? zeroAddr : poolAddress,
     userAddress
   );
 
   /* ── Write hooks ───────────────────────────────────────────── */
-  const addLiq = useAddLiquidity(
-    isZeroPool
-      ? ("0x0000000000000000000000000000000000000000" as `0x${string}`)
-      : poolAddress
-  );
-  const withdrawLiq = useWithdrawLiquidity(
-    isZeroPool
-      ? ("0x0000000000000000000000000000000000000000" as `0x${string}`)
-      : poolAddress
-  );
-  const claimFees = useClaimLPFees(
-    isZeroPool
-      ? ("0x0000000000000000000000000000000000000000" as `0x${string}`)
-      : poolAddress
-  );
+  const addLiq = useAddLiquidity(isZeroPool ? zeroAddr : poolAddress);
+  const withdrawLiq = useWithdrawLiquidity(isZeroPool ? zeroAddr : poolAddress);
+  const claimFees = useClaimLPFees(isZeroPool ? zeroAddr : poolAddress);
   const approveCUSDT = useApproveCUSDT();
   const fhe = useFHEEncrypt();
 
   /* ── Local state ───────────────────────────────────────────── */
   const [amount, setAmount] = useState("100");
   const [depositStep, setDepositStep] = useState<DepositStep>("idle");
-
+  const [showDepositForm, setShowDepositForm] = useState(false);
   const amountNum = parseFloat(amount) || 0;
-  const statusNum = typeof status === "number" ? status : 0;
 
   /* ── Track confirmation for deposit ────────────────────────── */
   const prevConfirmed = useRef(false);
@@ -130,14 +106,12 @@ function MarketLPCard({
       setDepositStep("encrypting");
       const amountBaseUnits = BigInt(Math.round(amountNum * 1e6));
 
-      /* Encrypt amount for the pool contract */
       const encResult = await fhe.encrypt(amountBaseUnits, poolAddress);
       if (!encResult) {
         setDepositStep("error");
         return;
       }
 
-      /* Approve cUSDT spend */
       setDepositStep("approving");
       const approveEnc = await fhe.encrypt(
         amountBaseUnits,
@@ -149,7 +123,6 @@ function MarketLPCard({
       }
       approveCUSDT.approve(poolAddress, approveEnc.handle, approveEnc.inputProof);
 
-      /* Call addLiquidity */
       setDepositStep("writing");
       addLiq.addLiquidity(encResult.handle, encResult.inputProof);
       setDepositStep("confirming");
@@ -161,174 +134,126 @@ function MarketLPCard({
   /* ── Loading skeleton ──────────────────────────────────────── */
   if (isMarketLoading || isPoolAddrLoading) {
     return (
-      <div className="card" style={{ padding: 0 }}>
-        <div className="card-head">
-          <div className="skel" style={{ width: "60%", height: 14 }} />
-          <div className="skel" style={{ width: 50, height: 20 }} />
-        </div>
-        <div className="card-body">
-          <div className="skel" style={{ width: "40%", height: 13, marginBottom: 16 }} />
-          <div className="skel" style={{ width: "100%", height: 36 }} />
-        </div>
-      </div>
+      <GlowCard style={{ padding: 22 }}>
+        <div style={{ width: "60%", height: 16, marginBottom: 16, background: "var(--bg-2)", borderRadius: 3 }} />
+        <div style={{ width: "40%", height: 14, marginBottom: 16, background: "var(--bg-2)", borderRadius: 3 }} />
+        <div style={{ width: "100%", height: 36, background: "var(--bg-2)", borderRadius: 3 }} />
+      </GlowCard>
     );
   }
 
   /* ── No pool deployed ──────────────────────────────────────── */
   if (isZeroPool) {
     return (
-      <div className="card" style={{ padding: 0 }}>
-        <div className="card-head">
-          <h3 style={{ flex: 1 }}>{question ?? "Unknown market"}</h3>
-          <span className={STATUS_PILL_CLASS[statusNum] ?? "pill"}>
-            {STATUS_LABELS[statusNum] ?? "Unknown"}
-          </span>
+      <GlowCard style={{ padding: 22 }}>
+        <div className="serif" style={{ fontSize: 17, fontWeight: 500, letterSpacing: "-0.005em", lineHeight: 1.3, marginBottom: 18, color: "var(--ink-1)" }}>
+          {question ?? "Unknown market"}
         </div>
-        <div
-          className="card-body"
-          style={{
-            padding: "32px 16px",
-            textAlign: "center",
-            color: "var(--t-4)",
-            fontSize: 13,
-          }}
-        >
+        <div style={{ textAlign: "center", color: "var(--ink-4)", fontSize: 13, padding: "16px 0" }}>
           No liquidity pool deployed for this market.
         </div>
-      </div>
+      </GlowCard>
     );
   }
 
-  /* ── Rendered card ─────────────────────────────────────────── */
+  const shareAmount = isLP ? (totalLiquidity / Math.max(lpCount, 1)) : 0;
+  const sharePct = totalLiquidity > 0 ? (shareAmount / totalLiquidity * 100) : 0;
+
   return (
-    <div className="card" style={{ padding: 0 }}>
-      {/* Header */}
-      <div className="card-head">
-        <h3 style={{ flex: 1 }}>{question ?? "Unknown market"}</h3>
-        <span className={STATUS_PILL_CLASS[statusNum] ?? "pill"}>
-          {STATUS_LABELS[statusNum] ?? "Unknown"}
-        </span>
+    <GlowCard style={{ padding: 22 }}>
+      {/* Market question */}
+      <div
+        className="serif"
+        style={{
+          fontSize: 17,
+          fontWeight: 500,
+          letterSpacing: "-0.005em",
+          lineHeight: 1.3,
+          marginBottom: 18,
+          color: "var(--ink-1)",
+          cursor: "pointer",
+        }}
+      >
+        {question ?? "Unknown market"}
       </div>
 
-      <div className="card-body">
-        {/* Pool stats row */}
-        <div
-          className="row between"
-          style={{ marginBottom: 16, fontSize: 13, color: "var(--t-2)" }}
-        >
-          <span className="mono">
-            {totalLiquidity > 0
-              ? `${totalLiquidity.toLocaleString(undefined, { maximumFractionDigits: 2 })} cUSDT`
-              : lpCount > 0
-                ? "Pending sync"
-                : "0.00 cUSDT"}
-            {" · "}{lpCount} LP{lpCount !== 1 ? "s" : ""}
-          </span>
-          <span className="mono" style={{ fontSize: 11, color: "var(--t-4)" }}>
-            {poolAddress.slice(0, 6)}...{poolAddress.slice(-4)}
-          </span>
-        </div>
-
-        {/* ── LP actions (withdraw + claim) ──────────────────── */}
-        {isLP && (
-          <div style={{ marginBottom: 16 }}>
-            <div
-              className="row"
-              style={{
-                gap: 8,
-                marginBottom: 12,
-                padding: "8px 12px",
-                background: "var(--yes-bg)",
-                border: "1px solid var(--yes-bd)",
-                borderRadius: 8,
-              }}
-            >
-              <CheckIcon size={12} />
-              <span style={{ fontSize: 12, color: "var(--yes-hi)", fontWeight: 500 }}>
-                You are an LP
-              </span>
-              <span
-                className="mono"
-                style={{
-                  marginLeft: "auto",
-                  fontSize: 11,
-                  color: "var(--t-3)",
-                }}
-              >
-                Share: encrypted
-              </span>
-            </div>
-
-            <div className="row" style={{ gap: 8 }}>
-              <button
-                className="btn secondary"
-                type="button"
-                onClick={() => withdrawLiq.withdrawLiquidity()}
-                disabled={withdrawLiq.isWriting || withdrawLiq.isConfirming}
-                style={{ flex: 1 }}
-              >
-                {withdrawLiq.isWriting
-                  ? "Confirm in wallet..."
-                  : withdrawLiq.isConfirming
-                    ? "Confirming..."
-                    : withdrawLiq.isConfirmed
-                      ? "Withdrawn"
-                      : "Withdraw"}
-              </button>
-              <button
-                className="btn secondary"
-                type="button"
-                onClick={() => claimFees.claimFees()}
-                disabled={claimFees.isWriting || claimFees.isConfirming}
-                style={{ flex: 1 }}
-              >
-                {claimFees.isWriting
-                  ? "Confirm in wallet..."
-                  : claimFees.isConfirming
-                    ? "Confirming..."
-                    : claimFees.isConfirmed
-                      ? "Claimed"
-                      : "Claim fees"}
-              </button>
-            </div>
-
-            {/* Withdraw/claim errors */}
-            {withdrawLiq.error && (
-              <p
-                className="mono"
-                style={{
-                  fontSize: 11,
-                  color: "var(--no)",
-                  marginTop: 8,
-                  wordBreak: "break-all",
-                }}
-              >
-                {withdrawLiq.error.message}
-              </p>
-            )}
-            {claimFees.error && (
-              <p
-                className="mono"
-                style={{
-                  fontSize: 11,
-                  color: "var(--no)",
-                  marginTop: 8,
-                  wordBreak: "break-all",
-                }}
-              >
-                {claimFees.error.message}
-              </p>
+      {/* 2-col stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+        <div>
+          <div style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 6 }}>
+            Your share
+          </div>
+          <div className="mono" style={{ fontSize: 20, color: isLP ? "var(--ink-1)" : "var(--ink-3)", letterSpacing: "-0.01em" }}>
+            {isLP ? (
+              <>
+                <CipherReveal value={shareAmount.toFixed(2)} reveal={reveal} width={7} />
+                <span style={{ color: "var(--ink-3)", fontSize: 11, marginLeft: 6 }}>cUSDT</span>
+              </>
+            ) : (
+              <span style={{ fontSize: 14 }}>&mdash;</span>
             )}
           </div>
-        )}
-
-        {/* ── Deposit form (non-LP or LP wanting to add more) ── */}
+          {isLP && reveal && (
+            <div className="mono" style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 4 }}>
+              {sharePct.toFixed(3)}% of pool
+            </div>
+          )}
+        </div>
         <div>
-          <div className="field" style={{ marginBottom: 10 }}>
-            <label className="eyebrow">Deposit amount</label>
-            <div className="input-row">
+          <div style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 6 }}>
+            Pool TVL
+          </div>
+          <div className="mono" style={{ fontSize: 20, color: "var(--ink-1)", letterSpacing: "-0.01em" }}>
+            {fmtUSD(totalLiquidity)}
+          </div>
+        </div>
+      </div>
+
+      {/* Buttons or deposit form */}
+      {!showDepositForm ? (
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => setShowDepositForm(true)}
+            style={{
+              flex: 1,
+              padding: "9px 0",
+              fontSize: 12,
+              background: "var(--gold)",
+              color: "#1A1511",
+              borderRadius: 3,
+              fontWeight: 500,
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            Deposit
+          </button>
+          <button
+            disabled={!isLP}
+            onClick={() => { if (isLP) withdrawLiq.withdrawLiquidity(); }}
+            style={{
+              flex: 1,
+              padding: "9px 0",
+              fontSize: 12,
+              border: "1px solid var(--line-2)",
+              borderRadius: 3,
+              color: !isLP ? "var(--ink-4)" : "var(--ink-2)",
+              opacity: !isLP ? 0.5 : 1,
+              background: "transparent",
+              cursor: isLP ? "pointer" : "default",
+            }}
+          >
+            {withdrawLiq.isWriting ? "Confirm..." : withdrawLiq.isConfirming ? "Withdrawing..." : withdrawLiq.isConfirmed ? "Withdrawn" : "Withdraw"}
+          </button>
+        </div>
+      ) : (
+        <div>
+          <div style={{ marginBottom: 10 }}>
+            <label className="mono" style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--ink-3)", display: "block", marginBottom: 6 }}>
+              Deposit amount
+            </label>
+            <div style={{ display: "flex", border: "1px solid var(--line-2)", borderRadius: 3, overflow: "hidden" }}>
               <input
-                className="input input-mono"
                 type="text"
                 placeholder="0.00"
                 value={amount}
@@ -336,33 +261,49 @@ function MarketLPCard({
                   setAmount(e.target.value);
                   if (depositStep !== "idle") setDepositStep("idle");
                 }}
+                className="mono"
+                style={{
+                  flex: 1,
+                  padding: "8px 12px",
+                  fontSize: 14,
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--ink-1)",
+                  outline: "none",
+                }}
               />
-              <span className="unit">cUSDT</span>
+              <span className="mono" style={{ padding: "8px 12px", fontSize: 11, color: "var(--ink-3)", display: "flex", alignItems: "center" }}>
+                cUSDT
+              </span>
             </div>
           </div>
 
-          {/* Quick amount buttons */}
-          <div className="row gap-2" style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
             {[50, 100, 250, 500].map((qa) => (
               <button
                 key={qa}
-                className={`btn sm ${amount === String(qa) ? "primary" : "ghost"}`}
-                type="button"
+                className="mono"
                 onClick={() => {
                   setAmount(String(qa));
                   if (depositStep !== "idle") setDepositStep("idle");
                 }}
-                style={{ flex: 1, justifyContent: "center" }}
+                style={{
+                  flex: 1,
+                  padding: "6px 0",
+                  fontSize: 11,
+                  border: `1px solid ${amount === String(qa) ? "var(--gold-dim)" : "var(--line)"}`,
+                  borderRadius: 3,
+                  color: amount === String(qa) ? "var(--gold)" : "var(--ink-3)",
+                  background: "transparent",
+                  cursor: "pointer",
+                }}
               >
                 {qa}
               </button>
             ))}
           </div>
 
-          {/* Deposit button */}
           <button
-            className="btn primary block"
-            type="button"
             onClick={handleDeposit}
             disabled={
               !userAddress ||
@@ -371,9 +312,21 @@ function MarketLPCard({
               addLiq.isWriting ||
               addLiq.isConfirming
             }
+            style={{
+              width: "100%",
+              padding: "9px 0",
+              fontSize: 12,
+              background: "var(--gold)",
+              color: "#1A1511",
+              borderRadius: 3,
+              fontWeight: 500,
+              border: "none",
+              cursor: "pointer",
+              opacity: (!userAddress || depositStep !== "idle" || amountNum <= 0) ? 0.5 : 1,
+            }}
           >
             {!userAddress
-              ? "Connect wallet to deposit"
+              ? "Connect wallet"
               : depositStep === "encrypting"
                 ? "Encrypting..."
                 : depositStep === "approving"
@@ -387,71 +340,42 @@ function MarketLPCard({
                         : `Deposit ${amountNum > 0 ? `${amountNum} cUSDT` : ""}`}
           </button>
 
-          {/* Error state */}
           {depositStep === "error" && (
-            <div
-              style={{
-                background: "var(--no-bg)",
-                border: "1px solid var(--no-bd)",
-                borderRadius: 8,
-                padding: "10px 14px",
-                marginTop: 10,
-                fontSize: 12,
-              }}
-            >
-              <p style={{ color: "var(--no)", fontWeight: 500, marginBottom: 6 }}>
-                {fhe.error || addLiq.error?.message || "Something went wrong"}
-              </p>
+            <div style={{ marginTop: 10, padding: "8px 12px", fontSize: 12, color: "var(--no)", border: "1px solid var(--line)", borderRadius: 3 }}>
+              <p style={{ marginBottom: 6 }}>{fhe.error || addLiq.error?.message || "Something went wrong"}</p>
               <button
-                className="btn sm ghost"
-                type="button"
-                onClick={() => {
-                  setDepositStep("idle");
-                  fhe.reset();
-                }}
+                onClick={() => { setDepositStep("idle"); fhe.reset(); }}
+                style={{ fontSize: 11, color: "var(--ink-2)", background: "transparent", border: "1px solid var(--line)", borderRadius: 3, padding: "4px 10px", cursor: "pointer" }}
               >
                 Retry
               </button>
             </div>
           )}
-
-          {addLiq.error && depositStep !== "error" && (
-            <p
-              className="mono"
-              style={{
-                fontSize: 11,
-                color: "var(--no)",
-                marginTop: 8,
-                wordBreak: "break-all",
-              }}
-            >
-              {addLiq.error.message}
-            </p>
-          )}
         </div>
+      )}
 
-        {/* Privacy notice */}
-        <div
+      {/* Claim fees for LPs */}
+      {isLP && !showDepositForm && (
+        <button
+          onClick={() => claimFees.claimFees()}
+          disabled={claimFees.isWriting || claimFees.isConfirming}
+          className="mono"
           style={{
-            background: "var(--enc-bg)",
-            border: "1px solid var(--enc-bd)",
-            borderRadius: 8,
-            padding: "10px 14px",
-            marginTop: 14,
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 8,
+            width: "100%",
+            marginTop: 8,
+            padding: "7px 0",
+            fontSize: 11,
+            border: "1px solid var(--line)",
+            borderRadius: 3,
+            color: "var(--ink-3)",
+            background: "transparent",
+            cursor: "pointer",
           }}
         >
-          <LockIcon size={11} />
-          <div style={{ fontSize: 11, color: "var(--enc)", lineHeight: 1.5 }}>
-            <strong>LP shares are encrypted</strong>
-            <br />
-            Your deposit amount is private. Only aggregate liquidity is public.
-          </div>
-        </div>
-      </div>
-    </div>
+          {claimFees.isWriting ? "Confirm..." : claimFees.isConfirming ? "Claiming..." : claimFees.isConfirmed ? "Fees claimed" : "Claim fees"}
+        </button>
+      )}
+    </GlowCard>
   );
 }
 
@@ -459,140 +383,63 @@ function MarketLPCard({
 
 export default function LiquidityPage() {
   const { allMarkets, isLoading } = useFactoryMarkets();
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<string | null>(null);
-
-  const handleSync = async () => {
-    setSyncing(true);
-    setSyncResult(null);
-    try {
-      const res = await fetch("/api/keeper");
-      const data = await res.json();
-      if (data.ok) {
-        setSyncResult(`Synced ${data.updated} pool${data.updated !== 1 ? "s" : ""}`);
-      } else {
-        setSyncResult(data.error || "Sync failed");
-      }
-    } catch {
-      setSyncResult("Sync failed");
-    } finally {
-      setSyncing(false);
-      setTimeout(() => setSyncResult(null), 4000);
-    }
-  };
+  const [reveal, setReveal] = useState(false);
 
   return (
-    <div className="page">
-      <div className="container">
-        {/* Page head */}
-        <div className="row between" style={{ marginBottom: 24 }}>
-          <div className="page-head" style={{ padding: 0 }}>
-            <h1 style={{ fontSize: 36 }}>Liquidity</h1>
-            <p className="sub">
-              Provide liquidity to markets and earn fees from trading.
-            </p>
-          </div>
-          <div className="row gap-2">
-            {syncResult && (
-              <span className="mono" style={{ fontSize: 11, color: "var(--t-3)" }}>
-                {syncResult}
-              </span>
-            )}
-            <button
-              className="btn secondary sm"
-              onClick={handleSync}
-              disabled={syncing}
-            >
-              {syncing ? "Syncing..." : "Sync totals"}
-            </button>
-          </div>
-        </div>
-
-        {/* Loading */}
-        {isLoading && (
-          <div
-            className="row"
-            style={{
-              justifyContent: "center",
-              padding: "60px 20px",
-              gap: 12,
-            }}
-          >
-            <span
-              style={{
-                width: 16,
-                height: 16,
-                borderRadius: "50%",
-                border: "2px solid var(--acc)",
-                borderTopColor: "transparent",
-                animation: "spin 1s linear infinite",
-              }}
-            />
-            <span style={{ fontSize: 13, color: "var(--t-2)" }}>
-              Loading markets...
-            </span>
-          </div>
-        )}
-
-        {/* Market LP cards */}
-        {!isLoading && allMarkets.length > 0 && (
-          <div className="stack gap-4">
-            <div className="row between">
-              <span className="eyebrow">
-                {allMarkets.length} market{allMarkets.length !== 1 ? "s" : ""}
-              </span>
-            </div>
-            {allMarkets.map((addr, i) => (
-              <MarketLPCard
-                key={addr}
-                marketAddress={addr}
-                marketIndex={i}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!isLoading && allMarkets.length === 0 && (
-          <div
-            className="card elevated"
-            style={{
-              padding: "80px 20px",
-              textAlign: "center",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <CheckIcon size={24} />
-            <span
-              style={{
-                fontSize: 14,
-                fontWeight: 500,
-                color: "var(--t-2)",
-              }}
-            >
-              No markets available
-            </span>
-            <span
-              style={{
-                fontSize: 12,
-                color: "var(--t-3)",
-                maxWidth: 320,
-              }}
-            >
-              Markets will appear here once they are created.
-            </span>
-          </div>
-        )}
+    <div className="page-in" style={{ maxWidth: 1280, margin: "0 auto", padding: "44px 48px 80px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 36 }}>
+        <h1 className="serif" style={{ fontSize: 38, fontWeight: 500, letterSpacing: "-0.02em" }}>
+          Liquidity
+        </h1>
+        <button
+          onClick={() => setReveal(true)}
+          disabled={reveal}
+          style={{
+            fontSize: 12,
+            padding: "8px 14px",
+            border: `1px solid ${reveal ? "var(--line)" : "var(--gold-dim)"}`,
+            borderRadius: 3,
+            color: reveal ? "var(--ink-3)" : "var(--gold)",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            background: "transparent",
+            cursor: reveal ? "default" : "pointer",
+          }}
+        >
+          <Icon name="eye" size={12} />
+          {reveal ? "Revealed" : "Reveal shares"}
+        </button>
       </div>
 
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+      {/* Loading */}
+      {isLoading && (
+        <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--ink-3)", fontSize: 13 }}>
+          Loading markets...
+        </div>
+      )}
+
+      {/* LP cards grid */}
+      {!isLoading && allMarkets.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))", gap: 12 }}>
+          {allMarkets.map((addr, i) => (
+            <MarketLPCard
+              key={addr}
+              marketAddress={addr}
+              marketIndex={i}
+              reveal={reveal}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!isLoading && allMarkets.length === 0 && (
+        <div style={{ padding: "80px 20px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>
+          No markets available. Markets will appear here once they are created.
+        </div>
+      )}
     </div>
   );
 }

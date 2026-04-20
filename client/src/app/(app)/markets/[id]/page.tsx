@@ -2,18 +2,18 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useAccount, useReadContract, useBlockNumber, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import {
-  LockIcon,
-  FHEBadge,
-  Pill,
-  RefreshIcon,
-  CopyIcon,
-  CheckIcon,
-  ExternalIcon,
-} from "@/components/shared/Icons";
+  useAccount,
+  useReadContract,
+  useBlockNumber,
+  useWriteContract,
+  useWaitForTransactionReceipt,
+} from "wagmi";
+import { Icon, CheckIcon } from "@/components/shared/Icons";
 import { OddsBar } from "@/components/shared/OddsBar";
-import { EncryptedValue } from "@/components/shared/EncryptedValue";
+import { GlowCard } from "@/components/shared/GlowCard";
+import { CipherReveal } from "@/components/shared/CipherReveal";
+import { PulseDot } from "@/components/shared/PulseDot";
 import { useMarket, useHasPosition } from "@/hooks/useMarket";
 import { usePlaceBet } from "@/hooks/usePlaceBet";
 import { useClaimWinnings } from "@/hooks/useClaimWinnings";
@@ -35,14 +35,6 @@ const STATUS_LABELS: Record<number, string> = {
   4: "CANCELLED",
 };
 
-const STATUS_PILL: Record<number, string> = {
-  0: "open",
-  1: "neutral",
-  2: "neutral",
-  3: "resolved",
-  4: "cancelled",
-};
-
 const MARKET_TYPE_LABELS: Record<number, string> = {
   0: "Binary",
   1: "Scalar",
@@ -58,25 +50,101 @@ function fmtCUSDT(raw: bigint | undefined): string {
 
 function truncAddr(addr: string): string {
   if (addr.length <= 10) return addr;
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  return `${addr.slice(0, 6)}\u2026${addr.slice(-4)}`;
 }
 
-/* ── Copy-to-clipboard inline button ───────────────────────────── */
+function formatPool(value: number): string {
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
+  return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
-function CopyBtn({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
+/* ── MetaCell ──────────────────────────────────────────────────── */
+
+function MetaCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: 9,
+          color: "var(--ink-4)",
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          marginBottom: 5,
+        }}
+      >
+        {label}
+      </div>
+      <div className="mono" style={{ color: "var(--ink-2)", fontSize: 11 }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+/* ── SideButton ────────────────────────────────────────────────── */
+
+function SideButton({
+  active,
+  side,
+  pct,
+  onClick,
+  dim,
+}: {
+  active: boolean;
+  side: "YES" | "NO";
+  pct: number;
+  onClick: () => void;
+  dim: boolean;
+}) {
+  const isYes = side === "YES";
+  const color = isYes ? "var(--yes)" : "var(--no)";
   return (
     <button
-      className="btn ghost"
       type="button"
-      style={{ padding: 0, height: "auto", minHeight: 0, marginLeft: 4 }}
-      onClick={() => {
-        navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
+      onClick={onClick}
+      style={{
+        position: "relative",
+        padding: "16px 0",
+        border: `1px solid ${active ? color : "var(--line-2)"}`,
+        borderLeft: active
+          ? `3px solid ${color}`
+          : "1px solid var(--line-2)",
+        borderRadius: 4,
+        background: active
+          ? isYes
+            ? "rgba(107,155,122,0.08)"
+            : "rgba(184,107,107,0.08)"
+          : "var(--bg-0)",
+        opacity: dim ? 0.4 : 1,
+        transition: "all 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+        transform: active ? "scale(1.0)" : "scale(0.98)",
+        textAlign: "center",
+        cursor: "pointer",
       }}
     >
-      {copied ? <CheckIcon size={10} /> : <CopyIcon size={10} />}
+      <div
+        className="mono"
+        style={{
+          fontSize: 11,
+          color,
+          letterSpacing: "0.18em",
+          fontWeight: 500,
+        }}
+      >
+        {side}
+      </div>
+      <div
+        className="mono"
+        style={{
+          fontSize: 20,
+          color: "var(--ink-1)",
+          marginTop: 6,
+          letterSpacing: "-0.01em",
+        }}
+      >
+        {pct.toFixed(1)}%
+      </div>
     </button>
   );
 }
@@ -192,13 +260,16 @@ export default function MarketDetailPage({
 
   /* ── Zustand store ───────────────────────────────────────────── */
   const addPosition = useNullCastStore((s) => s.addPosition);
-  const invalidateDecrypt = useNullCastStore((s) => s.invalidateDecryptedValues);
+  const invalidateDecrypt = useNullCastStore(
+    (s) => s.invalidateDecryptedValues
+  );
   const storedPositions = useNullCastStore((s) => s.positions);
 
   /* ── Local UI state ──────────────────────────────────────────── */
   const [side, setSide] = useState<"YES" | "NO">("YES");
   const [amount, setAmount] = useState("100");
   const [betStep, setBetStep] = useState<BetStep>("idle");
+  const [positionReveal, setPositionReveal] = useState(false);
 
   /* ── Derived values ──────────────────────────────────────────── */
   const amountNum = parseFloat(amount) || 0;
@@ -207,8 +278,8 @@ export default function MarketDetailPage({
   const selectedPct = side === "YES" ? yesPct : noPct;
   const multiplier =
     selectedPct > 0 ? (100 / selectedPct).toFixed(2) : "0.00";
-  const payout = (amountNum * parseFloat(multiplier)).toFixed(2);
-  const profit = (parseFloat(payout) - amountNum).toFixed(2);
+  const payout = amountNum * parseFloat(multiplier);
+  const profit = payout - amountNum;
 
   const minimumBetCUSDT = market.minimumBet
     ? Number(market.minimumBet) / 1e6
@@ -226,7 +297,7 @@ export default function MarketDetailPage({
     [storedPositions, resolvedAddress, hasAddress]
   );
 
-  const quickAmounts = [25, 50, 100, 250];
+  const quickAmounts = [25, 50, 100, 250, 500];
 
   /* ── Bet handler ─────────────────────────────────────────────── */
   const handlePlaceBet = useCallback(async () => {
@@ -301,7 +372,6 @@ export default function MarketDetailPage({
         txHash: bet.hash,
       });
       setBetStep("confirmed");
-      // Invalidate cached decrypted values so next decrypt fetches fresh
       invalidateDecrypt(resolvedAddress);
       oddsKeeper.updateOdds();
       setTimeout(() => market.refetch(), 15_000);
@@ -330,57 +400,14 @@ export default function MarketDetailPage({
     claim.claimWinnings();
   }, [isConnected, hasAddress, claim]);
 
-  /* ── Error / loading states ──────────────────────────────────── */
-  if (!isValidId) {
-    return (
-      <div className="container" style={{ paddingTop: 80, textAlign: "center" }}>
-        <p style={{ color: "var(--t-2)", marginBottom: 12 }}>Invalid market ID</p>
-        <Link href="/markets" className="btn secondary">
-          Back to Markets
-        </Link>
-      </div>
-    );
-  }
-
-  if (isAddressLoading || (hasAddress && market.isLoading)) {
-    return (
-      <div className="container" style={{ paddingTop: 80, textAlign: "center" }}>
-        <span className="mono" style={{ color: "var(--t-3)" }}>
-          Loading market data from Sepolia...
-        </span>
-      </div>
-    );
-  }
-
-  if (addressError || !hasAddress) {
-    return (
-      <div className="container" style={{ paddingTop: 80, textAlign: "center" }}>
-        <p style={{ color: "var(--t-2)", marginBottom: 8 }}>
-          Market #{marketId} not found
-        </p>
-        <p className="mono" style={{ color: "var(--t-4)", marginBottom: 20, fontSize: 12 }}>
-          This market may not exist on the factory contract.
-        </p>
-        <Link href="/markets" className="btn secondary">
-          Back to Markets
-        </Link>
-      </div>
-    );
-  }
-
-  if (market.error) {
-    return (
-      <div className="container" style={{ paddingTop: 80, textAlign: "center" }}>
-        <p style={{ color: "var(--t-2)", marginBottom: 8 }}>Error loading market</p>
-        <p className="mono" style={{ color: "var(--t-4)", fontSize: 12 }}>
-          {market.error.message}
-        </p>
-        <Link href="/markets" className="btn secondary" style={{ marginTop: 20 }}>
-          Back to Markets
-        </Link>
-      </div>
-    );
-  }
+  /* ── Placeholder activity rows ───────────────────────────────── */
+  const placeholderActivity = [
+    { side: "YES", addr: "0x1a2b\u20269c0d", block: "--", mine: false },
+    { side: "NO", addr: "0x3e4f\u2026a1b2", block: "--", mine: false },
+    { side: "YES", addr: "0x5c6d\u2026e3f4", block: "--", mine: false },
+    { side: "YES", addr: "0x7a8b\u202612cd", block: "--", mine: false },
+    { side: "NO", addr: "0x9e0f\u202634ab", block: "--", mine: false },
+  ];
 
   /* ── Resolved outcome label ──────────────────────────────────── */
   const resolvedLabel =
@@ -390,263 +417,670 @@ export default function MarketDetailPage({
         ? "NO"
         : market.resolvedOutcome?.toString() ?? "--";
 
-  /* ── Detail items for market details card ─────────────────────── */
-  const detailItems: {
-    label: string;
-    value: string;
-    mono?: boolean;
-    copy?: string;
-  }[] = [
-    {
-      label: "Market type",
-      value: MARKET_TYPE_LABELS[market.marketType ?? 0] ?? "Binary",
-    },
-    {
-      label: "Category",
-      value: market.category || "--",
-    },
-    { label: "Fee", value: "0%" },
-    {
-      label: "Min bet",
-      value: market.minimumBet ? `${fmtCUSDT(market.minimumBet)} cUSDT` : "--",
-    },
-    {
-      label: "Oracle",
-      value: market.oracle ? truncAddr(market.oracle) : "--",
-      mono: true,
-      copy: market.oracle,
-    },
-    {
-      label: "Contract",
-      value: resolvedAddress ? truncAddr(resolvedAddress) : "--",
-      mono: true,
-      copy: resolvedAddress,
-    },
-    {
-      label: "Expiry block",
-      value: market.expiryBlock ? market.expiryBlock.toString() : "--",
-      mono: true,
-    },
-    {
-      label: "YES pool",
-      value: `${market.yesPool.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} cUSDT`,
-    },
-    {
-      label: "NO pool",
-      value: `${market.noPool.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} cUSDT`,
-    },
-    {
-      label: "Rep required",
-      value: "None",
-    },
-  ];
+  /* ── Position display value for CipherReveal ─────────────────── */
+  const positionValueStr = useMemo(() => {
+    if (!userDecrypt.isDecrypted) return "0.00";
+    const yesVal = userDecrypt.yesAmount
+      ? Number(userDecrypt.yesAmount) / 1e6
+      : 0;
+    const noVal = userDecrypt.noAmount
+      ? Number(userDecrypt.noAmount) / 1e6
+      : 0;
+    const total = yesVal + noVal;
+    return total.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }, [userDecrypt.isDecrypted, userDecrypt.yesAmount, userDecrypt.noAmount]);
 
-  /* ── Placeholder activity rows ───────────────────────────────── */
-  const placeholderActivity = [
-    { side: "YES", bettor: "0x1a2b...9c0d", block: "--", time: "--" },
-    { side: "NO", bettor: "0x3e4f...a1b2", block: "--", time: "--" },
-    { side: "YES", bettor: "0x5c6d...e3f4", block: "--", time: "--" },
-  ];
+  const positionSide = useMemo(() => {
+    if (!userDecrypt.isDecrypted) return "YES";
+    const yesVal = userDecrypt.yesAmount
+      ? Number(userDecrypt.yesAmount)
+      : 0;
+    const noVal = userDecrypt.noAmount ? Number(userDecrypt.noAmount) : 0;
+    return yesVal >= noVal ? "YES" : "NO";
+  }, [userDecrypt.isDecrypted, userDecrypt.yesAmount, userDecrypt.noAmount]);
+
+  /* ── Error / loading states ──────────────────────────────────── */
+  if (!isValidId) {
+    return (
+      <div
+        className="page-in"
+        style={{
+          maxWidth: 1280,
+          margin: "0 auto",
+          padding: "80px 48px",
+          textAlign: "center",
+        }}
+      >
+        <p style={{ color: "var(--ink-2)", marginBottom: 12 }}>
+          Invalid market ID
+        </p>
+        <Link
+          href="/markets"
+          style={{
+            fontSize: 13,
+            color: "var(--gold)",
+            textDecoration: "none",
+          }}
+        >
+          &larr; Back to Markets
+        </Link>
+      </div>
+    );
+  }
+
+  if (isAddressLoading || (hasAddress && market.isLoading)) {
+    return (
+      <div
+        className="page-in"
+        style={{
+          maxWidth: 1280,
+          margin: "0 auto",
+          padding: "80px 48px",
+          textAlign: "center",
+        }}
+      >
+        <span
+          className="mono"
+          style={{ color: "var(--ink-3)", fontSize: 12 }}
+        >
+          Loading market data from Sepolia...
+        </span>
+      </div>
+    );
+  }
+
+  if (addressError || !hasAddress) {
+    return (
+      <div
+        className="page-in"
+        style={{
+          maxWidth: 1280,
+          margin: "0 auto",
+          padding: "80px 48px",
+          textAlign: "center",
+        }}
+      >
+        <p style={{ color: "var(--ink-2)", marginBottom: 8 }}>
+          Market #{marketId} not found
+        </p>
+        <p
+          className="mono"
+          style={{
+            color: "var(--ink-4)",
+            marginBottom: 20,
+            fontSize: 12,
+          }}
+        >
+          This market may not exist on the factory contract.
+        </p>
+        <Link
+          href="/markets"
+          style={{
+            fontSize: 13,
+            color: "var(--gold)",
+            textDecoration: "none",
+          }}
+        >
+          &larr; Back to Markets
+        </Link>
+      </div>
+    );
+  }
+
+  if (market.error) {
+    return (
+      <div
+        className="page-in"
+        style={{
+          maxWidth: 1280,
+          margin: "0 auto",
+          padding: "80px 48px",
+          textAlign: "center",
+        }}
+      >
+        <p style={{ color: "var(--ink-2)", marginBottom: 8 }}>
+          Error loading market
+        </p>
+        <p
+          className="mono"
+          style={{ color: "var(--ink-4)", fontSize: 12 }}
+        >
+          {market.error.message}
+        </p>
+        <Link
+          href="/markets"
+          style={{
+            fontSize: 13,
+            color: "var(--gold)",
+            marginTop: 20,
+            display: "inline-block",
+            textDecoration: "none",
+          }}
+        >
+          &larr; Back to Markets
+        </Link>
+      </div>
+    );
+  }
 
   /* ── Render ──────────────────────────────────────────────────── */
   return (
-    <div className="container" style={{ paddingTop: 28, paddingBottom: 80 }}>
+    <div
+      className="page-in"
+      style={{
+        maxWidth: 1280,
+        margin: "0 auto",
+        padding: "32px 48px 80px",
+      }}
+    >
+      {/* Breadcrumb */}
+      <div style={{ marginBottom: 24 }}>
+        <Link
+          href="/markets"
+          className="mono"
+          style={{
+            fontSize: 11,
+            color: "var(--ink-3)",
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            textDecoration: "none",
+          }}
+        >
+          &larr; Markets
+        </Link>
+        <span
+          className="mono"
+          style={{
+            fontSize: 11,
+            color: "var(--ink-4)",
+            margin: "0 10px",
+          }}
+        >
+          /
+        </span>
+        <span
+          className="mono"
+          style={{
+            fontSize: 11,
+            color: "var(--ink-3)",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+          }}
+        >
+          {market.category || MARKET_TYPE_LABELS[market.marketType ?? 0] || "Binary"}
+        </span>
+      </div>
+
       <div
-        className="detail-2col"
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0,1fr) 380px",
-          gap: 28,
-          alignItems: "start",
+          gridTemplateColumns: "1fr 380px",
+          gap: 48,
+          alignItems: "flex-start",
         }}
       >
         {/* ================================================================
             LEFT COLUMN
             ================================================================ */}
-        <div className="stack gap-4">
-          {/* Pills row */}
-          <div className="row gap-2" style={{ flexWrap: "wrap" }}>
-            <Pill variant="cat">
-              {MARKET_TYPE_LABELS[market.marketType ?? 0] ?? "Binary"}
-            </Pill>
-            {market.category && (
-              <Pill>{market.category}</Pill>
-            )}
-            {market.status !== undefined && (
-              <Pill variant={STATUS_PILL[market.status] ?? ""}>
-                {STATUS_LABELS[market.status] ?? "UNKNOWN"}
-              </Pill>
-            )}
-            {market.disputed && (
-              <Pill variant="cancelled">DISPUTED</Pill>
-            )}
-            <FHEBadge />
-            {market.expiryBlock && (
-              <Pill>Block {market.expiryBlock.toString()}</Pill>
-            )}
-            <Pill className="mono">#{marketId}</Pill>
-          </div>
-
+        <div>
           {/* Question */}
           <h1
-            className="display"
+            className="serif"
             style={{
               fontSize: 42,
-              letterSpacing: "-0.03em",
-              lineHeight: 1.1,
+              fontWeight: 500,
+              letterSpacing: "-0.02em",
+              lineHeight: 1.15,
+              color: "var(--ink-1)",
+              textWrap: "balance",
+              margin: 0,
             }}
           >
             {market.question ?? "Loading..."}
           </h1>
 
-          {/* ── Odds card ──────────────────────────────────────── */}
-          <div className="card elevated" style={{ padding: "20px 24px" }}>
-            <div className="row between" style={{ marginBottom: 16 }}>
-              <span className="eyebrow">Aggregate odds</span>
-              <button
-                className="btn ghost"
-                type="button"
-                onClick={() => {
-                  oddsKeeper.updateOdds();
-                  setTimeout(() => market.refetch(), 15_000);
-                }}
-                disabled={oddsKeeper.isUpdating}
-                style={{ gap: 4, fontSize: 12 }}
-              >
-                <RefreshIcon size={11} />
-                {oddsKeeper.isUpdating ? "Decrypting..." : "Refresh odds"}
-              </button>
-            </div>
-            <OddsBar yes={yesPct} no={noPct} size="lg" />
+          {/* Big odds bar */}
+          <div style={{ marginTop: 40 }}>
+            <OddsBar
+              yes={yesPct}
+              no={noPct}
+              size="lg"
+              showLabels={false}
+            />
             <div
-              className="row between"
-              style={{ marginTop: 10, fontSize: 11, color: "var(--t-3)" }}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginTop: 14,
+              }}
             >
-              <span className="mono">
-                Pool: {market.totalPool.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} cUSDT
-              </span>
-              <span className="row gap-2" style={{ gap: 6 }}>
-                <span
-                  className="dot-live"
-                  style={{ width: 6, height: 6, display: "inline-block" }}
-                />
-                <span className="mono">Live</span>
-              </span>
-            </div>
-          </div>
-
-          {/* ── Market details card ────────────────────────────── */}
-          <div className="card">
-            <div className="card-head">
-              <span>Market details</span>
-              <span className="mono" style={{ fontSize: 11, color: "var(--t-3)" }}>
-                Sepolia
-              </span>
-            </div>
-            <div className="card-body">
-              <div className="grid-3">
-                {detailItems.map((item) => (
-                  <div key={item.label}>
-                    <div className="eyebrow">{item.label}</div>
-                    <div
-                      className={item.mono ? "mono" : ""}
-                      style={{
-                        fontSize: 13,
-                        color: "var(--t-1)",
-                        display: "flex",
-                        alignItems: "center",
-                      }}
-                    >
-                      {item.value}
-                      {item.copy && <CopyBtn text={item.copy} />}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {resolvedAddress && (
-                <a
-                  href={`https://sepolia.etherscan.io/address/${resolvedAddress}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn ghost"
+              <div>
+                <div
+                  className="mono"
                   style={{
-                    marginTop: 16,
-                    fontSize: 11,
-                    gap: 4,
-                    display: "inline-flex",
+                    fontSize: 30,
+                    color: "var(--yes)",
+                    fontWeight: 500,
+                    letterSpacing: "-0.02em",
                   }}
                 >
-                  <ExternalIcon size={10} />
-                  View on Etherscan
-                </a>
-              )}
+                  {yesPct.toFixed(1)}%
+                </div>
+                <div
+                  className="mono"
+                  style={{
+                    fontSize: 10,
+                    color: "var(--ink-3)",
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    marginTop: 4,
+                  }}
+                >
+                  YES
+                </div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div
+                  className="mono"
+                  style={{
+                    fontSize: 30,
+                    color: "var(--no)",
+                    fontWeight: 500,
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  {noPct.toFixed(1)}%
+                </div>
+                <div
+                  className="mono"
+                  style={{
+                    fontSize: 10,
+                    color: "var(--ink-3)",
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    marginTop: 4,
+                  }}
+                >
+                  NO
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* ── Activity table ─────────────────────────────────── */}
-          <div className="card">
-            <div className="card-head">
-              <span>Recent activity</span>
-              <Pill variant="enc">Amounts encrypted</Pill>
+          {/* Pool row */}
+          <div
+            className="mono"
+            style={{
+              marginTop: 32,
+              paddingTop: 20,
+              paddingBottom: 20,
+              borderTop: "1px solid var(--line)",
+              borderBottom: "1px solid var(--line)",
+              display: "flex",
+              gap: 32,
+              fontSize: 13,
+              color: "var(--ink-2)",
+              alignItems: "center",
+            }}
+          >
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <PulseDot color="var(--gold)" />
+              <span style={{ color: "var(--ink-1)" }}>
+                {formatPool(market.totalPool)}
+              </span>
+              <span style={{ color: "var(--ink-3)", fontSize: 11 }}>
+                pool
+              </span>
+            </span>
+            <span style={{ color: "var(--ink-4)" }}>&middot;</span>
+            <span>
+              <span style={{ color: "var(--ink-1)" }}>
+                {market.expiryBlock
+                  ? market.expiryBlock.toString()
+                  : "--"}
+              </span>
+              <span
+                style={{
+                  color: "var(--ink-3)",
+                  fontSize: 11,
+                  marginLeft: 6,
+                }}
+              >
+                expiry
+              </span>
+            </span>
+          </div>
+
+          {/* Your position (compact) */}
+          {(hasPosition || localPositions.length > 0) && (
+            <div
+              style={{
+                marginTop: 24,
+                padding: "14px 18px",
+                border: "1px solid var(--line)",
+                borderRadius: 4,
+                display: "flex",
+                alignItems: "center",
+                gap: 24,
+              }}
+            >
+              <span
+                className="mono"
+                style={{
+                  fontSize: 10,
+                  color: "var(--ink-3)",
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Your position
+              </span>
+              {userDecrypt.isDecrypted ? (
+                <>
+                  <span
+                    className="mono"
+                    style={{
+                      fontSize: 13,
+                      color:
+                        positionSide === "YES"
+                          ? "var(--yes)"
+                          : "var(--no)",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {positionSide}
+                  </span>
+                  <span
+                    className="mono"
+                    style={{
+                      fontSize: 14,
+                      color: "var(--ink-1)",
+                      minWidth: 120,
+                    }}
+                  >
+                    <CipherReveal
+                      value={positionValueStr}
+                      reveal={positionReveal}
+                      width={8}
+                    />
+                    <span
+                      style={{
+                        color: "var(--ink-3)",
+                        marginLeft: 6,
+                        fontSize: 11,
+                      }}
+                    >
+                      cUSDT
+                    </span>
+                  </span>
+                </>
+              ) : (
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: 14,
+                    color: "var(--ink-3)",
+                    minWidth: 120,
+                  }}
+                >
+                  {"\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"}
+                  <span
+                    style={{
+                      color: "var(--ink-3)",
+                      marginLeft: 6,
+                      fontSize: 11,
+                    }}
+                  >
+                    cUSDT
+                  </span>
+                </span>
+              )}
+              <div style={{ flex: 1 }} />
+              {userDecrypt.isDecrypted ? (
+                <button
+                  type="button"
+                  onClick={() => setPositionReveal(true)}
+                  disabled={positionReveal}
+                  style={{
+                    fontSize: 12,
+                    color: positionReveal
+                      ? "var(--ink-3)"
+                      : "var(--gold)",
+                    padding: "6px 12px",
+                    border: `1px solid ${positionReveal ? "var(--line)" : "var(--gold-dim)"}`,
+                    borderRadius: 3,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    cursor: positionReveal ? "default" : "pointer",
+                    background: "none",
+                  }}
+                >
+                  <Icon name="eye" size={12} />
+                  {positionReveal ? "Revealed" : "Reveal"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={userDecrypt.decrypt}
+                  disabled={userDecrypt.isDecrypting}
+                  style={{
+                    fontSize: 12,
+                    color: "var(--gold)",
+                    padding: "6px 12px",
+                    border: "1px solid var(--gold-dim)",
+                    borderRadius: 3,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    cursor: "pointer",
+                    background: "none",
+                  }}
+                >
+                  <Icon name="eye" size={12} />
+                  {userDecrypt.isDecrypting ? "Decrypting..." : "Reveal"}
+                </button>
+              )}
             </div>
-            <div className="card-body" style={{ padding: 0 }}>
-              <table className="table" style={{ width: "100%" }}>
-                <thead>
-                  <tr>
-                    <th>Side</th>
-                    <th>Bettor</th>
-                    <th>Amount</th>
-                    <th>Block</th>
-                    <th>Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {placeholderActivity.map((row, i) => (
-                    <tr key={i}>
-                      <td>
-                        <span className={`pill ${row.side === "YES" ? "yes" : "no"}`}>
-                          {row.side}
-                        </span>
-                      </td>
-                      <td className="mono">{row.bettor}</td>
-                      <td>
-                        <EncryptedValue state="hidden" compact />
-                      </td>
-                      <td className="mono">{row.block}</td>
-                      <td style={{ color: "var(--t-4)" }}>{row.time}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          )}
+
+          {/* Metadata grid */}
+          <div
+            className="mono"
+            style={{
+              marginTop: 36,
+              display: "grid",
+              gridTemplateColumns: "repeat(4, 1fr)",
+              gap: 20,
+              fontSize: 11,
+              color: "var(--ink-3)",
+            }}
+          >
+            <MetaCell
+              label="Oracle"
+              value={
+                market.oracle ? truncAddr(market.oracle) : "--"
+              }
+            />
+            <MetaCell
+              label="Contract"
+              value={
+                resolvedAddress ? truncAddr(resolvedAddress) : "--"
+              }
+            />
+            <MetaCell label="Fee" value="0%" />
+            <MetaCell
+              label="Min bet"
+              value={
+                market.minimumBet
+                  ? `${fmtCUSDT(market.minimumBet)} cUSDT`
+                  : "--"
+              }
+            />
+          </div>
+
+          {/* Activity feed */}
+          <div style={{ marginTop: 48 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                justifyContent: "space-between",
+                marginBottom: 14,
+              }}
+            >
+              <h2
+                className="serif"
+                style={{
+                  fontSize: 20,
+                  fontWeight: 500,
+                  letterSpacing: "-0.01em",
+                  margin: 0,
+                }}
+              >
+                Recent activity
+              </h2>
+              <span
+                className="mono"
+                style={{
+                  fontSize: 10,
+                  color: "var(--ink-3)",
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <PulseDot color="var(--yes)" /> live
+              </span>
+            </div>
+            <div
+              style={{
+                border: "1px solid var(--line)",
+                borderRadius: 4,
+                background: "var(--bg-1)",
+                overflow: "hidden",
+              }}
+            >
+              {placeholderActivity.map((row, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "12px 140px 1fr 120px",
+                    alignItems: "center",
+                    padding: "10px 18px",
+                    gap: 16,
+                    borderTop:
+                      i === 0 ? "none" : "1px solid var(--line)",
+                    background: row.mine
+                      ? "var(--bg-2)"
+                      : "transparent",
+                    opacity: 1 - i * 0.04,
+                    transition: "opacity 300ms",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background:
+                        row.side === "YES"
+                          ? "var(--yes)"
+                          : "var(--no)",
+                      display: "inline-block",
+                    }}
+                  />
+                  <span
+                    className="mono"
+                    style={{
+                      fontSize: 12,
+                      color: "var(--ink-2)",
+                    }}
+                  >
+                    {row.addr}
+                    {row.mine && (
+                      <span
+                        style={{
+                          color: "var(--gold)",
+                          fontSize: 10,
+                          marginLeft: 4,
+                        }}
+                      >
+                        you
+                      </span>
+                    )}
+                  </span>
+                  <span
+                    className="mono"
+                    style={{
+                      fontSize: 11,
+                      color: "var(--ink-3)",
+                      letterSpacing: "0.06em",
+                    }}
+                  >
+                    encrypted
+                  </span>
+                  <span
+                    className="mono"
+                    style={{
+                      fontSize: 11,
+                      color: "var(--ink-3)",
+                      textAlign: "right",
+                    }}
+                  >
+                    block {row.block}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
         {/* ================================================================
-            RIGHT COLUMN
+            RIGHT COLUMN -- Trading panel
             ================================================================ */}
-        <div style={{ position: "sticky", top: 80 }}>
-          {/* ── Resolved outcome card (shown instead of betting panel) ── */}
+        <aside style={{ position: "sticky", top: 72 }}>
+          {/* ── Resolved outcome card ────────────────────────────── */}
           {isMarketResolved && (
-            <div className="card elevated" style={{ marginBottom: 16 }}>
-              <div className="card-head">
-                <span>Resolved</span>
-                <FHEBadge />
+            <GlowCard style={{ padding: 24, marginBottom: 16 }}>
+              <div
+                className="mono"
+                style={{
+                  fontSize: 10,
+                  color: "var(--ink-3)",
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                  marginBottom: 12,
+                }}
+              >
+                Resolved
               </div>
-              <div className="card-body" style={{ textAlign: "center" }}>
-                <div className="eyebrow" style={{ marginBottom: 6 }}>
-                  Outcome
-                </div>
+              <div
+                style={{ textAlign: "center", padding: "12px 0" }}
+              >
                 <div
-                  className="display"
+                  className="serif"
                   style={{
                     fontSize: 32,
+                    fontWeight: 500,
                     color:
                       resolvedLabel === "YES"
                         ? "var(--yes)"
                         : resolvedLabel === "NO"
                           ? "var(--no)"
-                          : "var(--t-1)",
+                          : "var(--ink-1)",
                   }}
                 >
                   {resolvedLabel}
@@ -654,11 +1088,26 @@ export default function MarketDetailPage({
 
                 {isConnected && hasPosition && !hasClaimed && (
                   <button
-                    className="btn lg block yes"
-                    onClick={handleClaim}
-                    disabled={claim.isWriting || claim.isConfirming}
                     type="button"
-                    style={{ marginTop: 20 }}
+                    onClick={handleClaim}
+                    disabled={
+                      claim.isWriting || claim.isConfirming
+                    }
+                    style={{
+                      width: "100%",
+                      marginTop: 20,
+                      padding: "14px 0",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      borderRadius: 4,
+                      color: "#0C1510",
+                      background: "var(--yes)",
+                      border: "none",
+                      cursor:
+                        claim.isWriting || claim.isConfirming
+                          ? "not-allowed"
+                          : "pointer",
+                    }}
                   >
                     {claim.isWriting
                       ? "Submitting..."
@@ -672,10 +1121,10 @@ export default function MarketDetailPage({
 
                 {isConnected && hasClaimed && (
                   <div
-                    className="row"
                     style={{
-                      justifyContent: "center",
                       marginTop: 16,
+                      display: "flex",
+                      justifyContent: "center",
                       gap: 6,
                       color: "var(--yes)",
                       fontSize: 13,
@@ -690,7 +1139,7 @@ export default function MarketDetailPage({
                     style={{
                       marginTop: 16,
                       fontSize: 12,
-                      color: "var(--t-4)",
+                      color: "var(--ink-4)",
                     }}
                   >
                     No position in this market.
@@ -711,80 +1160,134 @@ export default function MarketDetailPage({
                   </p>
                 )}
               </div>
-            </div>
+            </GlowCard>
           )}
 
-          {/* ── Dispute window card (shown when market is resolved) ── */}
-          {isMarketResolved && (() => {
-            const resolvedAt = market.resolvedAtBlock;
-            const window = market.disputeWindow;
-            const isDisputed = market.disputed || isDisputeConfirmed;
+          {/* ── Dispute window card ──────────────────────────────── */}
+          {isMarketResolved &&
+            (() => {
+              const resolvedAt = market.resolvedAtBlock;
+              const window = market.disputeWindow;
+              const isDisputed =
+                market.disputed || isDisputeConfirmed;
 
-            if (!resolvedAt || !window) return null;
+              if (!resolvedAt || !window) return null;
 
-            const deadline = resolvedAt + window;
-            const blocksRemaining = currentBlock
-              ? Number(deadline) - Number(currentBlock)
-              : null;
-            const windowOpen = blocksRemaining !== null && blocksRemaining > 0;
+              const deadline = resolvedAt + window;
+              const blocksRemaining = currentBlock
+                ? Number(deadline) - Number(currentBlock)
+                : null;
+              const windowOpen =
+                blocksRemaining !== null && blocksRemaining > 0;
 
-            return (
-              <div className="card" style={{ marginBottom: 16 }}>
-                <div className="card-head">
-                  <span>Dispute window</span>
-                  {isDisputed && (
-                    <span className="pill" style={{ background: "var(--no-bg)", color: "var(--no-hi)", borderColor: "var(--no-bd)" }}>
-                      Under dispute
-                    </span>
-                  )}
-                </div>
-                <div className="card-body">
+              return (
+                <div
+                  style={{
+                    border: "1px solid var(--line)",
+                    borderRadius: 4,
+                    padding: 20,
+                    marginBottom: 16,
+                  }}
+                >
+                  <div
+                    className="mono"
+                    style={{
+                      fontSize: 10,
+                      color: "var(--ink-3)",
+                      letterSpacing: "0.16em",
+                      textTransform: "uppercase",
+                      marginBottom: 14,
+                    }}
+                  >
+                    Dispute window
+                  </div>
                   {isDisputed ? (
                     <div style={{ textAlign: "center", padding: "8px 0" }}>
-                      <p style={{ fontSize: 13, color: "var(--no-hi)", fontWeight: 500, marginBottom: 4 }}>
+                      <p
+                        style={{
+                          fontSize: 13,
+                          color: "var(--no)",
+                          fontWeight: 500,
+                          marginBottom: 4,
+                        }}
+                      >
                         This market has been disputed
                       </p>
-                      <p style={{ fontSize: 12, color: "var(--t-3)", margin: 0 }}>
+                      <p
+                        style={{
+                          fontSize: 12,
+                          color: "var(--ink-3)",
+                          margin: 0,
+                        }}
+                      >
                         Resolution is under review by the oracle.
                       </p>
                     </div>
                   ) : windowOpen ? (
                     <div>
-                      <div className="row between" style={{ marginBottom: 12, fontSize: 13 }}>
-                        <span style={{ color: "var(--t-3)" }}>Blocks remaining</span>
-                        <span className="mono" style={{ color: "var(--t-1)", fontWeight: 600 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginBottom: 12,
+                          fontSize: 13,
+                        }}
+                      >
+                        <span style={{ color: "var(--ink-3)" }}>
+                          Blocks remaining
+                        </span>
+                        <span
+                          className="mono"
+                          style={{
+                            color: "var(--ink-1)",
+                            fontWeight: 600,
+                          }}
+                        >
                           {blocksRemaining!.toLocaleString()}
                         </span>
                       </div>
-                      <div className="row between" style={{ marginBottom: 12, fontSize: 12 }}>
-                        <span style={{ color: "var(--t-4)" }}>Deadline block</span>
-                        <span className="mono" style={{ color: "var(--t-3)" }}>
-                          #{deadline.toString()}
-                        </span>
-                      </div>
-                      {/* Progress bar */}
-                      <div style={{
-                        width: "100%",
-                        height: 4,
-                        background: "var(--border-1)",
-                        borderRadius: 2,
-                        marginBottom: 14,
-                        overflow: "hidden",
-                      }}>
-                        <div style={{
-                          width: `${Math.max(0, Math.min(100, ((Number(window) - blocksRemaining!) / Number(window)) * 100))}%`,
-                          height: "100%",
-                          background: "var(--acc)",
+                      <div
+                        style={{
+                          width: "100%",
+                          height: 4,
+                          background: "var(--line)",
                           borderRadius: 2,
-                          transition: "width 0.3s ease",
-                        }} />
+                          marginBottom: 14,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${Math.max(0, Math.min(100, ((Number(window) - blocksRemaining!) / Number(window)) * 100))}%`,
+                            height: "100%",
+                            background: "var(--gold)",
+                            borderRadius: 2,
+                            transition: "width 0.3s ease",
+                          }}
+                        />
                       </div>
                       {isConnected && (
                         <button
-                          className="btn secondary block"
                           type="button"
                           onClick={handleRaiseDispute}
-                          disabled={isDisputeWriting || isDisputeConfirming}
+                          disabled={
+                            isDisputeWriting ||
+                            isDisputeConfirming
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "10px 0",
+                            fontSize: 12,
+                            border: "1px solid var(--line-2)",
+                            borderRadius: 4,
+                            color: "var(--ink-1)",
+                            background: "transparent",
+                            cursor:
+                              isDisputeWriting ||
+                              isDisputeConfirming
+                                ? "not-allowed"
+                                : "pointer",
+                          }}
                         >
                           {isDisputeWriting
                             ? "Confirm in wallet..."
@@ -793,7 +1296,8 @@ export default function MarketDetailPage({
                               : "Raise Dispute"}
                         </button>
                       )}
-                      {(disputeWriteError || disputeConfirmError) && (
+                      {(disputeWriteError ||
+                        disputeConfirmError) && (
                         <p
                           className="mono"
                           style={{
@@ -803,476 +1307,431 @@ export default function MarketDetailPage({
                             wordBreak: "break-all",
                           }}
                         >
-                          {(disputeWriteError || disputeConfirmError)?.message}
+                          {(
+                            disputeWriteError ||
+                            disputeConfirmError
+                          )?.message}
                         </p>
                       )}
                     </div>
                   ) : (
-                    <div style={{ textAlign: "center", padding: "8px 0" }}>
-                      <p style={{ fontSize: 13, color: "var(--t-3)", margin: 0 }}>
+                    <div
+                      style={{
+                        textAlign: "center",
+                        padding: "8px 0",
+                      }}
+                    >
+                      <p
+                        style={{
+                          fontSize: 13,
+                          color: "var(--ink-3)",
+                          margin: 0,
+                        }}
+                      >
                         Dispute window closed
                       </p>
                     </div>
                   )}
                 </div>
-              </div>
-            );
-          })()}
+              );
+            })()}
 
-          {/* ── Betting panel (only when not resolved) ─────────── */}
+          {/* ── Betting panel ─────────────────────────────────────── */}
           {!isMarketResolved && (
-            <div className="card elevated">
-              <div className="card-head">
-                <span>
-                  {isMarketCancelled ? "Market cancelled" : "Place bet"}
-                </span>
-                <FHEBadge />
-              </div>
-              <div className="card-body" style={{ padding: "16px 18px" }}>
-                {/* Not connected */}
-                {!isConnected && (
-                  <p
-                    style={{
-                      textAlign: "center",
-                      padding: "32px 0",
-                      color: "var(--t-4)",
-                      fontSize: 13,
-                    }}
-                  >
-                    Connect wallet to place bets.
-                  </p>
-                )}
+            <GlowCard style={{ padding: 24 }}>
+              {/* Not connected */}
+              {!isConnected && (
+                <p
+                  style={{
+                    textAlign: "center",
+                    padding: "32px 0",
+                    color: "var(--ink-4)",
+                    fontSize: 13,
+                  }}
+                >
+                  Connect wallet to place bets.
+                </p>
+              )}
 
-                {/* Cancelled */}
-                {isConnected && isMarketCancelled && (
-                  <p
+              {/* Cancelled */}
+              {isConnected && isMarketCancelled && (
+                <p
+                  style={{
+                    textAlign: "center",
+                    padding: "24px 0",
+                    color: "var(--ink-4)",
+                    fontSize: 13,
+                  }}
+                >
+                  This market has been cancelled.
+                </p>
+              )}
+
+              {/* Expired / Resolving */}
+              {isConnected &&
+                !isMarketOpen &&
+                !isMarketCancelled && (
+                  <div
                     style={{
                       textAlign: "center",
                       padding: "24px 0",
-                      color: "var(--t-4)",
+                      color: "var(--ink-4)",
                       fontSize: 13,
                     }}
                   >
-                    This market has been cancelled.
-                  </p>
+                    <p>
+                      Market is{" "}
+                      <strong style={{ color: "var(--ink-2)" }}>
+                        {STATUS_LABELS[
+                          market.status ?? 0
+                        ]?.toLowerCase()}
+                      </strong>
+                      . Betting closed.
+                    </p>
+                  </div>
                 )}
 
-                {/* Expired / Resolving */}
-                {isConnected &&
-                  !isMarketOpen &&
-                  !isMarketCancelled && (
+              {/* ── Active betting UI ────────────────────────────── */}
+              {isConnected && isMarketOpen && (
+                <>
+                  {/* YES/NO side buttons */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 8,
+                      marginBottom: 20,
+                    }}
+                  >
+                    <SideButton
+                      active={side === "YES"}
+                      side="YES"
+                      pct={yesPct}
+                      onClick={() => setSide("YES")}
+                      dim={side === "NO"}
+                    />
+                    <SideButton
+                      active={side === "NO"}
+                      side="NO"
+                      pct={noPct}
+                      onClick={() => setSide("NO")}
+                      dim={side === "YES"}
+                    />
+                  </div>
+
+                  {/* Amount input */}
+                  <div style={{ marginBottom: 6 }}>
                     <div
+                      className="mono"
                       style={{
-                        textAlign: "center",
-                        padding: "24px 0",
-                        color: "var(--t-4)",
-                        fontSize: 13,
+                        fontSize: 10,
+                        color: "var(--ink-3)",
+                        letterSpacing: "0.16em",
+                        textTransform: "uppercase",
+                        marginBottom: 8,
                       }}
                     >
-                      <p>
-                        Market is{" "}
-                        <strong style={{ color: "var(--t-2)" }}>
-                          {STATUS_LABELS[market.status ?? 0]?.toLowerCase()}
-                        </strong>
-                        . Betting closed.
+                      Amount
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        border: `1px solid ${isAmountBelowMin ? "var(--no)" : "var(--line-2)"}`,
+                        borderRadius: 4,
+                        padding: "10px 14px",
+                        background: "var(--bg-0)",
+                      }}
+                    >
+                      <input
+                        className="mono"
+                        value={amount}
+                        onChange={(e) => {
+                          setAmount(
+                            e.target.value.replace(
+                              /[^0-9.]/g,
+                              ""
+                            )
+                          );
+                          if (betStep !== "idle")
+                            setBetStep("idle");
+                        }}
+                        style={{
+                          flex: 1,
+                          fontSize: 24,
+                          color: "var(--ink-1)",
+                          letterSpacing: "-0.01em",
+                          background: "transparent",
+                          border: "none",
+                          outline: "none",
+                        }}
+                      />
+                      <span
+                        className="mono"
+                        style={{
+                          fontSize: 12,
+                          color: "var(--ink-3)",
+                        }}
+                      >
+                        cUSDT
+                      </span>
+                    </div>
+                    {isAmountBelowMin && (
+                      <p
+                        style={{
+                          fontSize: 11,
+                          color: "var(--no)",
+                          marginTop: 4,
+                        }}
+                      >
+                        Minimum bet is {minimumBetCUSDT} cUSDT
                       </p>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
-                {/* ── Active betting UI ────────────────────────── */}
-                {isConnected && isMarketOpen && (
-                  <>
-                    {/* Side selector */}
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: 8,
-                        marginBottom: 20,
-                      }}
-                    >
+                  {/* Quick fill chips */}
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 6,
+                      marginTop: 10,
+                    }}
+                  >
+                    {quickAmounts.map((v) => (
                       <button
-                        className="card inter"
+                        key={v}
                         type="button"
-                        onClick={() => setSide("YES")}
+                        onClick={() => {
+                          setAmount(String(v));
+                          if (betStep !== "idle")
+                            setBetStep("idle");
+                        }}
+                        className="mono"
                         style={{
+                          flex: 1,
+                          padding: "7px 0",
+                          fontSize: 11,
+                          border: "1px solid var(--line)",
+                          borderRadius: 3,
+                          color:
+                            amount === String(v)
+                              ? "var(--ink-1)"
+                              : "var(--ink-2)",
+                          background:
+                            amount === String(v)
+                              ? "var(--bg-2)"
+                              : "transparent",
                           cursor: "pointer",
-                          textAlign: "left",
-                          padding: "16px 14px",
-                          background: side === "YES" ? "var(--yes-bg)" : undefined,
-                          borderColor: side === "YES" ? "var(--yes-bd)" : undefined,
                         }}
                       >
-                        <div
-                          className="display"
-                          style={{
-                            fontSize: 22,
-                            color: side === "YES" ? "var(--yes-hi)" : "var(--t-2)",
-                          }}
-                        >
-                          YES
-                        </div>
-                        <div className="mono" style={{ fontSize: 11, color: "var(--t-3)", marginTop: 6 }}>
-                          {yesPct}% · ×{yesPct > 0 ? (100 / yesPct).toFixed(2) : "0.00"}
-                        </div>
+                        {v}
                       </button>
-                      <button
-                        className="card inter"
-                        type="button"
-                        onClick={() => setSide("NO")}
-                        style={{
-                          cursor: "pointer",
-                          textAlign: "left",
-                          padding: "16px 14px",
-                          background: side === "NO" ? "var(--no-bg)" : undefined,
-                          borderColor: side === "NO" ? "var(--no-bd)" : undefined,
-                        }}
-                      >
-                        <div
-                          className="display"
-                          style={{
-                            fontSize: 22,
-                            color: side === "NO" ? "var(--no-hi)" : "var(--t-2)",
-                          }}
-                        >
-                          NO
-                        </div>
-                        <div className="mono" style={{ fontSize: 11, color: "var(--t-3)", marginTop: 6 }}>
-                          {noPct}% · ×{noPct > 0 ? (100 / noPct).toFixed(2) : "0.00"}
-                        </div>
-                      </button>
-                    </div>
+                    ))}
+                  </div>
 
-                    {/* Amount field */}
-                    <div className="field" style={{ marginBottom: 10 }}>
-                      <label className="eyebrow">
-                        Amount
-                        {minimumBetCUSDT > 0 && (
-                          <span style={{ textTransform: "none", marginLeft: 6, fontWeight: 400 }}>
-                            (min {minimumBetCUSDT})
-                          </span>
-                        )}
-                      </label>
-                      <div className="input-row">
-                        <input
-                          className="input input-mono"
-                          type="text"
-                          value={amount}
-                          onChange={(e) => {
-                            setAmount(e.target.value);
-                            if (betStep !== "idle") setBetStep("idle");
-                          }}
-                          style={{
-                            ...(isAmountBelowMin
-                              ? { borderColor: "var(--no)" }
-                              : {}),
-                          }}
-                        />
-                        <span className="unit">cUSDT</span>
-                      </div>
-                      {isAmountBelowMin && (
-                        <p style={{ fontSize: 11, color: "var(--no)", marginTop: 4 }}>
-                          Minimum bet is {minimumBetCUSDT} cUSDT
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Quick amount buttons */}
-                    <div className="row gap-2" style={{ marginBottom: 16 }}>
-                      {quickAmounts.map((qa) => (
-                        <button
-                          key={qa}
-                          className={`btn sm ${amount === String(qa) ? "primary" : "ghost"}`}
-                          type="button"
-                          onClick={() => {
-                            setAmount(String(qa));
-                            if (betStep !== "idle") setBetStep("idle");
-                          }}
-                          style={{ flex: 1, justifyContent: "center" }}
-                        >
-                          {qa}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Payout box */}
+                  {/* Payout preview */}
+                  <div
+                    style={{
+                      marginTop: 20,
+                      padding: "14px 16px",
+                      background: "var(--bg-0)",
+                      border: "1px solid var(--line)",
+                      borderRadius: 4,
+                    }}
+                  >
                     <div
+                      className="mono"
                       style={{
-                        background: "var(--bg-1)",
-                        border: "1px solid var(--border-1)",
-                        borderRadius: 8,
-                        padding: "14px 16px",
-                        marginBottom: 16,
-                        fontSize: 13,
+                        fontSize: 10,
+                        color: "var(--ink-3)",
+                        letterSpacing: "0.16em",
+                        textTransform: "uppercase",
+                        marginBottom: 6,
                       }}
                     >
-                      <div className="row between" style={{ marginBottom: 6 }}>
-                        <span style={{ color: "var(--t-3)" }}>Stake</span>
-                        <span className="num">{amountNum.toLocaleString()} cUSDT</span>
-                      </div>
-                      <div className="row between" style={{ marginBottom: 10 }}>
-                        <span style={{ color: "var(--t-3)" }}>Odds</span>
-                        <span className="num">{multiplier}x</span>
-                      </div>
-                      <hr className="divider" />
-                      <div className="row between" style={{ marginTop: 10, marginBottom: 4, fontWeight: 600 }}>
-                        <span>Payout if correct</span>
-                        <span className="num">
-                          {parseFloat(payout).toLocaleString()} cUSDT
-                        </span>
-                      </div>
-                      <div className="row between">
-                        <span style={{ color: "var(--t-3)" }}>Profit</span>
-                        <span
-                          className="num"
-                          style={{
-                            fontWeight: 600,
-                            color: side === "YES" ? "var(--yes)" : "var(--no)",
-                          }}
-                        >
-                          +{parseFloat(profit).toLocaleString()} cUSDT
-                        </span>
-                      </div>
+                      If correct
                     </div>
-
-                    {/* Submit button */}
-                    <button
-                      className={`btn lg block ${side === "YES" ? "yes" : "no"}`}
-                      onClick={handlePlaceBet}
-                      disabled={
-                        betStep !== "idle" ||
-                        amountNum <= 0 ||
-                        isAmountBelowMin ||
-                        isBetWriting ||
-                        isBetConfirming
-                      }
-                      type="button"
-                      style={{ marginBottom: 12, height: 48, fontSize: 14, fontWeight: 500 }}
+                    <div
+                      className="mono"
+                      style={{
+                        fontSize: 16,
+                        color: "var(--ink-1)",
+                      }}
                     >
-                      {betStep === "encrypting"
-                        ? "Encrypting..."
-                        : betStep === "approving"
-                          ? "Approving cUSDT..."
-                          : betStep === "writing" || isBetWriting
-                            ? "Confirm in wallet..."
-                            : isBetConfirming
-                              ? "Confirming..."
-                              : betStep === "confirmed"
-                                ? "Bet placed"
-                                : `Bet ${side} · ${amountNum} cUSDT`}
-                    </button>
-
-                    {/* Error state */}
-                    {betStep === "error" && (
-                      <div
+                      {payout.toFixed(2)}{" "}
+                      <span
                         style={{
-                          background: "var(--no-bg)",
-                          border: "1px solid var(--no-bd)",
-                          borderRadius: 8,
-                          padding: "10px 14px",
-                          marginBottom: 12,
+                          color: "var(--ink-3)",
                           fontSize: 12,
                         }}
                       >
-                        <p style={{ color: "var(--no)", fontWeight: 500, marginBottom: 6 }}>
-                          {fhe.error || bet.error?.message || "Something went wrong"}
-                        </p>
-                        <button
-                          className="btn sm ghost"
-                          type="button"
-                          onClick={() => {
-                            setBetStep("idle");
-                            fhe.reset();
-                          }}
-                        >
-                          Retry
-                        </button>
-                      </div>
-                    )}
-
-                    {bet.error && betStep !== "error" && (
-                      <div
+                        cUSDT
+                      </span>
+                      <span
                         style={{
-                          background: "var(--no-bg)",
-                          border: "1px solid var(--no-bd)",
-                          borderRadius: 8,
-                          padding: "10px 14px",
-                          marginBottom: 12,
+                          color:
+                            profit >= 0
+                              ? "var(--yes)"
+                              : "var(--no)",
+                          marginLeft: 10,
+                          fontSize: 13,
                         }}
                       >
-                        <p
-                          className="mono"
-                          style={{
-                            fontSize: 11,
-                            color: "var(--no)",
-                            wordBreak: "break-all",
-                          }}
-                        >
-                          {bet.error.message}
-                        </p>
-                      </div>
-                    )}
+                        {profit >= 0 ? "+" : ""}
+                        {profit.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
 
-                    {/* Privacy notice */}
+                  {/* Submit button */}
+                  <button
+                    type="button"
+                    onClick={handlePlaceBet}
+                    disabled={
+                      betStep !== "idle" ||
+                      amountNum <= 0 ||
+                      isAmountBelowMin ||
+                      isBetWriting ||
+                      isBetConfirming
+                    }
+                    style={{
+                      position: "relative",
+                      width: "100%",
+                      marginTop: 16,
+                      padding: "14px 0",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      letterSpacing: "0.02em",
+                      borderRadius: 4,
+                      color:
+                        side === "YES"
+                          ? "#0C1510"
+                          : "#150C0C",
+                      background:
+                        side === "YES"
+                          ? "var(--yes)"
+                          : "var(--no)",
+                      borderLeft: `3px solid ${side === "YES" ? "var(--yes-dim, var(--yes))" : "var(--no-dim, var(--no))"}`,
+                      borderTop: "none",
+                      borderRight: "none",
+                      borderBottom: "none",
+                      opacity:
+                        amountNum <= 0 ||
+                        isAmountBelowMin
+                          ? 0.45
+                          : 1,
+                      cursor:
+                        amountNum <= 0 ||
+                        isAmountBelowMin ||
+                        betStep !== "idle"
+                          ? "not-allowed"
+                          : "pointer",
+                      overflow: "hidden",
+                      transition: "background 200ms",
+                    }}
+                  >
+                    {betStep === "encrypting"
+                      ? "Encrypting..."
+                      : betStep === "approving"
+                        ? "Approving cUSDT..."
+                        : betStep === "writing" ||
+                            isBetWriting
+                          ? "Confirm in wallet..."
+                          : isBetConfirming
+                            ? "Confirming..."
+                            : betStep === "confirmed"
+                              ? "Done"
+                              : "Place bet"}
+                  </button>
+
+                  {/* Fee/min info */}
+                  <div
+                    className="mono"
+                    style={{
+                      marginTop: 14,
+                      fontSize: 10,
+                      color: "var(--ink-3)",
+                      textAlign: "center",
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Fee 0% &middot; Min{" "}
+                    {minimumBetCUSDT > 0
+                      ? minimumBetCUSDT
+                      : "--"}{" "}
+                    cUSDT
+                  </div>
+
+                  {/* Error state */}
+                  {betStep === "error" && (
                     <div
                       style={{
-                        background: "var(--enc-bg)",
-                        border: "1px solid var(--enc-bd)",
-                        borderRadius: 8,
+                        marginTop: 12,
                         padding: "10px 14px",
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: 8,
+                        border: "1px solid var(--no)",
+                        borderRadius: 4,
+                        fontSize: 12,
                       }}
                     >
-                      <LockIcon size={11} />
-                      <div style={{ fontSize: 11, color: "var(--enc)", lineHeight: 1.5 }}>
-                        <strong>Your bet is encrypted</strong>
-                        <br />
-                        Nobody can see your position. Only aggregate odds are public.
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── Position section ────────────────────────────────── */}
-          {(hasPosition || localPositions.length > 0) && (
-            <div className="card" style={{ marginTop: 16 }}>
-              <div className="card-head">
-                <span className="row gap-2" style={{ gap: 6 }}>
-                  <LockIcon size={11} /> Your position
-                </span>
-                {userDecrypt.isDecrypted && (
-                  <button
-                    className="btn sm ghost"
-                    type="button"
-                    onClick={userDecrypt.refresh}
-                    disabled={userDecrypt.isDecrypting}
-                    style={{ fontSize: 11, gap: 4 }}
-                  >
-                    <RefreshIcon size={10} />
-                    {userDecrypt.isCached ? "Cached" : "Refresh"}
-                  </button>
-                )}
-              </div>
-              <div className="card-body">
-                {userDecrypt.isDecrypted ? (
-                  <div className="stack gap-4" style={{ gap: 8 }}>
-                    {userDecrypt.yesAmount !== null &&
-                      userDecrypt.yesAmount > BigInt(0) && (
-                        <div className="row between" style={{ padding: "8px 0" }}>
-                          <span className="pill yes">YES</span>
-                          <span className="reveal num" style={{ fontSize: 15 }}>
-                            {(
-                              Number(userDecrypt.yesAmount) / 1e6
-                            ).toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                            <span
-                              style={{
-                                marginLeft: 4,
-                                color: "var(--t-3)",
-                                fontSize: 11,
-                              }}
-                            >
-                              cUSDT
-                            </span>
-                          </span>
-                        </div>
-                      )}
-                    {userDecrypt.noAmount !== null &&
-                      userDecrypt.noAmount > BigInt(0) && (
-                        <div className="row between" style={{ padding: "8px 0" }}>
-                          <span className="pill no">NO</span>
-                          <span className="reveal num" style={{ fontSize: 15 }}>
-                            {(
-                              Number(userDecrypt.noAmount) / 1e6
-                            ).toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                            <span
-                              style={{
-                                marginLeft: 4,
-                                color: "var(--t-3)",
-                                fontSize: 11,
-                              }}
-                            >
-                              cUSDT
-                            </span>
-                          </span>
-                        </div>
-                      )}
-                  </div>
-                ) : (
-                  <div>
-                    <div className="row between" style={{ marginBottom: 10 }}>
-                      <span className="enc-val" style={{ fontSize: 13 }}>
-                        <LockIcon size={11} />
-                        <span className="dots mono">•••••••</span>
-                        <span style={{ color: "var(--t-4)", fontSize: 11 }}>cUSDT</span>
-                      </span>
-                      <button
-                        className="btn sm secondary"
-                        onClick={userDecrypt.decrypt}
-                        disabled={userDecrypt.isDecrypting}
-                        type="button"
+                      <p
+                        style={{
+                          color: "var(--no)",
+                          fontWeight: 500,
+                          marginBottom: 6,
+                        }}
                       >
-                        {userDecrypt.isDecrypting ? "Decrypting..." : "Decrypt"}
+                        {fhe.error ||
+                          bet.error?.message ||
+                          "Something went wrong"}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBetStep("idle");
+                          fhe.reset();
+                        }}
+                        style={{
+                          fontSize: 11,
+                          color: "var(--ink-2)",
+                          border: "1px solid var(--line)",
+                          borderRadius: 3,
+                          padding: "4px 10px",
+                          background: "transparent",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Retry
                       </button>
                     </div>
-                    {userDecrypt.error && (
-                      <p style={{ fontSize: 11, color: "var(--no)", marginTop: 4 }}>
-                        {userDecrypt.error}
-                      </p>
-                    )}
-                  </div>
-                )}
+                  )}
 
-                {/* Bet history */}
-                {localPositions.length > 0 && (
-                  <>
-                    <hr className="divider" style={{ margin: "14px 0 10px" }} />
-                    <div className="eyebrow" style={{ marginBottom: 8 }}>
-                      Bet history (this session)
+                  {bet.error && betStep !== "error" && (
+                    <div
+                      style={{
+                        marginTop: 12,
+                        padding: "10px 14px",
+                        border: "1px solid var(--no)",
+                        borderRadius: 4,
+                      }}
+                    >
+                      <p
+                        className="mono"
+                        style={{
+                          fontSize: 11,
+                          color: "var(--no)",
+                          wordBreak: "break-all",
+                        }}
+                      >
+                        {bet.error.message}
+                      </p>
                     </div>
-                    <div className="stack gap-4" style={{ gap: 6 }}>
-                      {localPositions.map((pos, i) => (
-                        <div
-                          key={pos.txHash || i}
-                          className="row between"
-                          style={{ fontSize: 12, padding: "4px 0" }}
-                        >
-                          <div className="row gap-2" style={{ gap: 6 }}>
-                            <span
-                              className={`pill ${pos.side === "YES" ? "yes" : "no"}`}
-                              style={{ fontSize: 10 }}
-                            >
-                              {pos.side}
-                            </span>
-                            <span className="mono">
-                              {pos.amount} cUSDT
-                            </span>
-                          </div>
-                          <span
-                            className="mono"
-                            style={{ color: "var(--t-4)" }}
-                          >
-                            @ {pos.entryOdds}%
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
+                  )}
+                </>
+              )}
+            </GlowCard>
           )}
-        </div>
+        </aside>
       </div>
     </div>
   );

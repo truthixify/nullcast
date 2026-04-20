@@ -7,41 +7,20 @@ import { useMarket, useHasPosition } from "@/hooks/useMarket";
 import { useClaimWinnings } from "@/hooks/useClaimWinnings";
 import { useUserDecrypt as __useUserDecrypt } from "@/hooks/useUserDecrypt";
 import { useNullCastStore } from "@/lib/store";
-import {
-  LockIcon,
-  LockOpenIcon,
-  CheckIcon,
-  ArrowUpIcon,
-  ArrowDownIcon,
-} from "@/components/shared/Icons";
-import { EncryptedValue } from "@/components/shared/EncryptedValue";
+import { Icon } from "@/components/shared/Icons";
+import { CipherReveal } from "@/components/shared/CipherReveal";
 
-/* ── MarketStatus enum matching contract ─────────────────────── */
-const MarketStatus: Record<number, string> = {
-  0: "OPEN",
-  1: "CLOSED",
-  2: "RESOLVED",
-};
 
-/* ── Stat card ───────────────────────────────────────────────── */
-function Stat({
-  label,
-  children,
-  sub,
-}: {
-  label: string;
-  children: React.ReactNode;
-  sub?: string;
-}) {
+/* ── Stat (inline) ───────────────────────────────────────────── */
+function Stat({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="card" style={{ padding: 16 }}>
-      <span className="eyebrow">{label}</span>
-      <div className="mono" style={{ fontSize: 22, fontWeight: 600, marginTop: 8 }}>
+    <div>
+      <div className="mono" style={{ fontSize: 34, fontWeight: 500, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
         {children}
       </div>
-      {sub && (
-        <div style={{ fontSize: 12, color: "var(--t-3)", marginTop: 4 }}>{sub}</div>
-      )}
+      <div style={{ marginTop: 6, fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+        {label}
+      </div>
     </div>
   );
 }
@@ -66,7 +45,6 @@ function PositionRow({
     s.positions.find((p) => p.marketAddress === marketAddress)
   );
 
-  // Decrypt support
   const { decrypt, isDecrypting, yesAmount, noAmount, isDecrypted } =
     __useUserDecrypt(marketAddress);
 
@@ -78,109 +56,122 @@ function PositionRow({
     }
   }, [autoDecrypt, isDecrypted, isDecrypting, decrypt]);
 
-  const decryptState: "hidden" | "decrypting" | "revealed" = isDecrypted
-    ? "revealed"
-    : isDecrypting
-      ? "decrypting"
-      : "hidden";
-
   const yesAmt = yesAmount ? (Number(yesAmount) / 1e6).toFixed(2) : null;
   const noAmt = noAmount ? (Number(noAmount) / 1e6).toFixed(2) : null;
   const hasYes = yesAmount && yesAmount > BigInt(0);
   const hasNo = noAmount && noAmount > BigInt(0);
 
-  const isResolved = status === 2;
-  const statusLabel = status !== undefined ? MarketStatus[status] ?? "UNKNOWN" : "...";
-  const delta = yesOdds !== undefined ? yesOdds - 50 : 0;
-
-  const marketCell = (rowSpan?: number) => (
-    <td rowSpan={rowSpan}>
-      <div style={{ fontWeight: 500, color: "var(--t-1)" }}>
-        {isMarketLoading ? "Loading..." : question ?? "Unknown market"}
-      </div>
-      <span className="mono" style={{ fontSize: 11, color: "var(--t-4)" }}>
-        {marketAddress.slice(0, 6)}...{marketAddress.slice(-4)}
-      </span>
-    </td>
-  );
-
-  const oddsCell = (rowSpan?: number) => (
-    <td rowSpan={rowSpan}>
-      <span className="mono" style={{ fontSize: 13, color: "var(--t-2)" }}>
-        {isMarketLoading ? "..." : `${yesOdds}%`}
-      </span>
-    </td>
-  );
-
-  const deltaCell = (rowSpan?: number) => (
-    <td rowSpan={rowSpan}>
-      {!isMarketLoading && (
-        <span className="row gap-2 mono" style={{ fontSize: 13, color: delta > 0 ? "var(--yes-hi)" : delta < 0 ? "var(--no-hi)" : "var(--t-3)" }}>
-          {delta > 0 ? <ArrowUpIcon size={12} /> : delta < 0 ? <ArrowDownIcon size={12} /> : null}
-          {delta > 0 ? "+" : ""}{delta}%
-        </span>
-      )}
-    </td>
-  );
-
-  const statusCell = (rowSpan?: number) => (
-    <td rowSpan={rowSpan}>
-      <span className={`pill ${statusLabel === "OPEN" ? "open" : statusLabel === "RESOLVED" ? "resolved" : ""}`}>
-        {statusLabel}
-      </span>
-    </td>
-  );
-
-  const actionCell = (rowSpan?: number) => (
-    <td rowSpan={rowSpan}>{isResolved ? <ClaimButton marketAddress={marketAddress} /> : null}</td>
-  );
-
-  // If decrypted and has BOTH sides, show 2 rows
-  if (isDecrypted && hasYes && hasNo) {
-    return (
-      <>
-        <tr>
-          {marketCell(2)}
-          <td><span className="pill yes">YES</span></td>
-          <td><span className="enc-val"><span className="reveal num">{yesAmt}</span> <span style={{color:"var(--t-3)",fontFamily:"var(--f-mono)",fontSize:12}}>cUSDT</span></span></td>
-          {oddsCell(2)}
-          {deltaCell(2)}
-          {statusCell(2)}
-          {actionCell(2)}
-        </tr>
-        <tr>
-          <td><span className="pill no">NO</span></td>
-          <td><span className="enc-val"><span className="reveal num">{noAmt}</span> <span style={{color:"var(--t-3)",fontFamily:"var(--f-mono)",fontSize:12}}>cUSDT</span></span></td>
-        </tr>
-      </>
-    );
-  }
-
-  // Single row — either not decrypted or only one side
   const sideLabel = isDecrypted
-    ? (hasYes ? "YES" : hasNo ? "NO" : storePosition?.side ?? "--")
-    : (storePosition?.side ?? "--");
-  const sideClass = sideLabel === "YES" ? "yes" : sideLabel === "NO" ? "no" : "";
+    ? hasYes ? "YES" : hasNo ? "NO" : storePosition?.side ?? "--"
+    : storePosition?.side ?? "--";
+
   const displayAmount = isDecrypted ? (hasYes ? yesAmt : noAmt) ?? "0.00" : "0.00";
+  const entryOdds = 50;
+  const currentOdds = yesOdds ?? 50;
+  const delta = currentOdds - entryOdds;
+
+  const pnl = isDecrypted ? (delta * parseFloat(displayAmount) / 100) : 0;
+  const isResolved = status === 2;
+
+  const gridStyle: React.CSSProperties = {
+    width: "100%",
+    display: "grid",
+    gridTemplateColumns: "2fr 60px 120px 140px 120px",
+    alignItems: "center",
+    padding: "16px 18px",
+    borderBottom: "1px solid var(--line)",
+    textAlign: "left",
+    background: "transparent",
+    transition: "background 160ms",
+    cursor: "pointer",
+    border: "none",
+  };
 
   return (
-    <tr>
-      {marketCell()}
-      <td>
-        {sideLabel !== "--" ? (
-          <span className={`pill ${sideClass}`}>{sideLabel}</span>
-        ) : (
-          <span style={{ color: "var(--t-4)" }}>--</span>
+    <>
+    <div
+      style={gridStyle}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-1)")}
+      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+    >
+      <span
+        className="serif"
+        style={{
+          fontSize: 15,
+          color: "var(--ink-1)",
+          letterSpacing: "-0.005em",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          paddingRight: 16,
+        }}
+      >
+        {isMarketLoading ? "Loading..." : question ?? "Unknown market"}
+      </span>
+
+      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: sideLabel === "YES" ? "var(--yes)" : sideLabel === "NO" ? "var(--no)" : "var(--ink-4)",
+          }}
+        />
+        <span
+          className="mono"
+          style={{
+            fontSize: 11,
+            color: sideLabel === "YES" ? "var(--yes)" : sideLabel === "NO" ? "var(--no)" : "var(--ink-4)",
+          }}
+        >
+          {sideLabel}
+        </span>
+      </span>
+
+      <span className="mono" style={{ fontSize: 13, color: "var(--ink-1)" }}>
+        <CipherReveal value={displayAmount} reveal={isDecrypted || !!autoDecrypt} width={7} />
+      </span>
+
+      <span
+        className="mono"
+        style={{ fontSize: 12, color: "var(--ink-2)", display: "flex", alignItems: "center", gap: 6 }}
+      >
+        <span style={{ color: "var(--ink-3)" }}>{entryOdds}%</span>
+        <Icon name="arrow-right" size={10} color="var(--ink-4)" />
+        <span style={{ color: "var(--ink-1)" }}>{currentOdds}%</span>
+        {delta !== 0 && (
+          <span
+            style={{
+              color: delta > 0 ? "var(--yes)" : "var(--no)",
+              fontSize: 10,
+            }}
+          >
+            {delta > 0 ? "\u25B2" : "\u25BC"}{Math.abs(delta)}
+          </span>
         )}
-      </td>
-      <td>
-        <EncryptedValue state={decryptState} value={displayAmount} onDecrypt={decrypt} unit="cUSDT" compact />
-      </td>
-      {oddsCell()}
-      {deltaCell()}
-      {statusCell()}
-      {actionCell()}
-    </tr>
+      </span>
+
+      <span
+        className="mono"
+        style={{
+          fontSize: 13,
+          textAlign: "right",
+          color: isDecrypted
+            ? pnl >= 0 ? "var(--yes)" : "var(--no)"
+            : "var(--ink-1)",
+        }}
+      >
+        {isDecrypted && pnl >= 0 ? "+" : ""}
+        <CipherReveal value={Math.abs(pnl).toFixed(2)} reveal={isDecrypted || !!autoDecrypt} width={6} />
+      </span>
+    </div>
+    {isResolved && (
+      <div style={{ padding: "0 18px 12px", borderBottom: "1px solid var(--line)" }}>
+        <ClaimButton marketAddress={marketAddress} />
+      </div>
+    )}
+    </>
   );
 }
 
@@ -195,8 +186,8 @@ function ClaimButton({ marketAddress }: { marketAddress: `0x${string}` }) {
 
   if (isConfirmed) {
     return (
-      <span className="row gap-2" style={{ color: "var(--yes-hi)", fontSize: 12, fontWeight: 500 }}>
-        <CheckIcon size={12} />
+      <span style={{ color: "var(--yes)", fontSize: 12, fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
+        <Icon name="check" size={12} />
         Claimed
       </span>
     );
@@ -204,9 +195,18 @@ function ClaimButton({ marketAddress }: { marketAddress: `0x${string}` }) {
 
   return (
     <button
-      className="btn primary sm"
       onClick={claimWinnings}
       disabled={isWriting || isConfirming}
+      style={{
+        padding: "6px 14px",
+        fontSize: 12,
+        background: "var(--gold)",
+        color: "#1A1511",
+        borderRadius: 3,
+        fontWeight: 500,
+        border: "none",
+        cursor: "pointer",
+      }}
     >
       {isWriting ? "Confirm..." : isConfirming ? "Claiming..." : "Claim"}
     </button>
@@ -236,241 +236,135 @@ function MarketPositionCheck({
 export default function PortfolioPage() {
   const { address, isConnected } = useAccount();
   const { allMarkets, isLoading: isMarketsLoading } = useFactoryMarkets();
-  useNullCastStore((s) => s.positions); // keep subscription active
+  useNullCastStore((s) => s.positions);
 
-  const [activeTab, setActiveTab] = useState<"active" | "settled" | "lp">("active");
-  const [decryptAll, setDecryptAll] = useState(false);
+  const [revealAll, setRevealAll] = useState(false);
 
-  const tabs = [
-    { key: "active" as const, label: "Active" },
-    { key: "settled" as const, label: "Settled" },
-    { key: "lp" as const, label: "LP" },
-  ];
+  const positionCount = allMarkets.length;
 
   return (
-    <div className="page">
-      <div className="container">
-        {/* Header */}
-        <div className="row between" style={{ marginBottom: 32 }}>
-          <div className="page-head" style={{ padding: 0 }}>
-            <h1 style={{ fontSize: 36 }}>Portfolio</h1>
-            <p className="sub">
-              Your positions are encrypted. Only you can decrypt them.
-            </p>
+    <div className="page-in" style={{ maxWidth: 1280, margin: "0 auto", padding: "44px 48px 80px" }}>
+      {/* Header row */}
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 36 }}>
+        <h1 className="serif" style={{ fontSize: 38, fontWeight: 500, letterSpacing: "-0.02em" }}>
+          Portfolio
+        </h1>
+        <button
+          onClick={() => setRevealAll(true)}
+          disabled={revealAll || !isConnected || !address}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 12,
+            padding: "8px 14px",
+            border: `1px solid ${revealAll ? "var(--line)" : "var(--gold-dim)"}`,
+            borderRadius: 3,
+            color: revealAll ? "var(--ink-3)" : "var(--gold)",
+            background: "transparent",
+            cursor: revealAll ? "default" : "pointer",
+          }}
+        >
+          <Icon name="eye" size={12} />
+          {revealAll ? "All revealed" : "Reveal all"}
+        </button>
+      </div>
+
+      {/* Stats row */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: 48,
+          paddingBottom: 32,
+          borderBottom: "1px solid var(--line)",
+        }}
+      >
+        <Stat label="Positions">
+          {isMarketsLoading ? "..." : positionCount}
+        </Stat>
+        <div>
+          <div className="mono" style={{ fontSize: 34, fontWeight: 500, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
+            <CipherReveal value="0.00" reveal={revealAll} width={8} />
           </div>
-          <button className="btn secondary" onClick={() => setDecryptAll(true)} disabled={!isConnected || !address || decryptAll}>
-            <LockOpenIcon size={14} />
-            {decryptAll ? "Decrypting…" : "Decrypt all"}
-          </button>
+          <div style={{ marginTop: 6, fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+            At stake
+          </div>
         </div>
-
-        {/* Stats */}
-        <div className="grid-4" style={{ marginBottom: 32 }}>
-          <Stat label="Active positions" sub="On-chain">
-            {isMarketsLoading ? "..." : allMarkets.length}
-          </Stat>
-          <Stat label="Total at stake" sub="Decrypt to reveal">
-            <span className="mono" style={{ color: "var(--t-3)" }}>
-              {decryptAll ? "Decrypting…" : "—"}
-            </span>
-          </Stat>
-          <Stat label="Unrealized P&L" sub="Decrypt to reveal">
-            <span className="mono" style={{ color: "var(--t-3)" }}>—</span>
-          </Stat>
-          <Stat label="Claimable" sub="Resolved markets">
-            <span className="mono">0</span>
-          </Stat>
-        </div>
-
-        {/* Tabs card */}
-        <div className="card" style={{ padding: 0 }}>
-          {/* Tab header */}
+        <div>
           <div
+            className="mono"
             style={{
-              display: "flex",
-              gap: 6,
-              padding: "12px 16px",
-              borderBottom: "1px solid var(--border-1)",
+              fontSize: 34,
+              fontWeight: 500,
+              letterSpacing: "-0.02em",
+              lineHeight: 1.1,
+              color: "var(--ink-1)",
             }}
           >
-            {tabs.map((t) => (
-              <button
-                key={t.key}
-                className={`btn sm ${activeTab === t.key ? "secondary" : "ghost"}`}
-                onClick={() => setActiveTab(t.key)}
-                style={{
-                  borderColor: activeTab === t.key ? "var(--border-3)" : undefined,
-                }}
-              >
-                {t.label}
-              </button>
-            ))}
+            <CipherReveal value="0.00" reveal={revealAll} width={8} />
           </div>
-
-          {/* Active tab */}
-          {activeTab === "active" && (
-            <>
-              {!isConnected || !address ? (
-                <div
-                  style={{
-                    padding: "80px 20px",
-                    textAlign: "center",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 12,
-                    color: "var(--t-3)",
-                    fontSize: 13,
-                  }}
-                >
-                  <LockIcon size={24} />
-                  <span style={{ fontWeight: 500, color: "var(--t-2)" }}>
-                    Connect wallet to view positions
-                  </span>
-                  <span style={{ fontSize: 12, maxWidth: 320 }}>
-                    Your positions are encrypted on-chain. Only your wallet can decrypt them.
-                  </span>
-                </div>
-              ) : isMarketsLoading ? (
-                <div
-                  className="row"
-                  style={{
-                    justifyContent: "center",
-                    padding: "60px 20px",
-                    gap: 12,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: "50%",
-                      border: "2px solid var(--acc)",
-                      borderTopColor: "transparent",
-                      animation: "spin 1s linear infinite",
-                    }}
-                  />
-                  <span style={{ fontSize: 13, color: "var(--t-2)" }}>
-                    Loading markets...
-                  </span>
-                </div>
-              ) : allMarkets.length === 0 ? (
-                <div
-                  style={{
-                    padding: "80px 20px",
-                    textAlign: "center",
-                    color: "var(--t-3)",
-                    fontSize: 13,
-                  }}
-                >
-                  No markets found. Place a bet to see your positions here.
-                </div>
-              ) : (
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Market</th>
-                      <th>Side</th>
-                      <th>Position</th>
-                      <th>Entry</th>
-                      <th>Current</th>
-                      <th>Status</th>
-                      <th style={{ width: 80 }} />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allMarkets.map((addr) => (
-                      <MarketPositionCheck
-                        key={addr}
-                        marketAddress={addr}
-                        userAddress={address}
-                        autoDecrypt={decryptAll}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              )}
-
-              {!isMarketsLoading && allMarkets.length > 0 && (
-                <div
-                  className="row gap-2"
-                  style={{
-                    padding: "10px 16px",
-                    borderTop: "1px solid var(--border-1)",
-                    fontSize: 11,
-                    color: "var(--t-4)",
-                  }}
-                >
-                  <LockIcon size={10} />
-                  Checking {allMarkets.length} market(s) for positions. Markets with no position are hidden.
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Settled tab */}
-          {activeTab === "settled" && (
-            <div
-              style={{
-                padding: "80px 20px",
-                textAlign: "center",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 12,
-              }}
-            >
-              <CheckIcon size={24} />
-              <span style={{ fontSize: 14, fontWeight: 500, color: "var(--t-2)" }}>
-                No settled positions yet
-              </span>
-              <span style={{ fontSize: 12, color: "var(--t-3)", maxWidth: 320 }}>
-                Resolved markets where you claimed winnings will appear here.
-              </span>
-            </div>
-          )}
-
-          {/* LP tab */}
-          {activeTab === "lp" && (
-            <div
-              style={{
-                padding: "80px 20px",
-                textAlign: "center",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 12,
-              }}
-            >
-              <div
-                style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: "50%",
-                  border: "2px dashed var(--border-2)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <LockIcon size={22} />
-              </div>
-              <span style={{ fontSize: 14, fontWeight: 500, color: "var(--t-2)" }}>
-                No liquidity positions yet
-              </span>
-              <span style={{ fontSize: 12, color: "var(--t-3)", maxWidth: 320 }}>
-                Provide liquidity to markets and earn fees from trading activity.
-              </span>
-            </div>
-          )}
+          <div style={{ marginTop: 6, fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+            P&amp;L
+          </div>
+        </div>
+        <div>
+          <div className="mono" style={{ fontSize: 34, fontWeight: 500, letterSpacing: "-0.02em", lineHeight: 1.1, color: "var(--gold)" }}>
+            0.00
+          </div>
+          <div style={{ marginTop: 6, fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+            Claimable
+          </div>
         </div>
       </div>
 
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+      {/* Table */}
+      <div style={{ marginTop: 36 }}>
+        {/* Header row */}
+        <div
+          className="mono"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "2fr 60px 120px 140px 120px",
+            padding: "10px 18px",
+            fontSize: 9,
+            color: "var(--ink-4)",
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            borderBottom: "1px solid var(--line)",
+          }}
+        >
+          <span>Market</span>
+          <span>Side</span>
+          <span>Amount</span>
+          <span>Odds</span>
+          <span style={{ textAlign: "right" }}>P&amp;L</span>
+        </div>
+
+        {/* Content */}
+        {!isConnected || !address ? (
+          <div style={{ padding: "60px 20px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>
+            Connect wallet to view positions
+          </div>
+        ) : isMarketsLoading ? (
+          <div style={{ padding: "60px 20px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>
+            Loading markets...
+          </div>
+        ) : allMarkets.length === 0 ? (
+          <div style={{ padding: "60px 20px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>
+            No positions found. Place a bet to see your positions here.
+          </div>
+        ) : (
+          allMarkets.map((addr) => (
+            <MarketPositionCheck
+              key={addr}
+              marketAddress={addr}
+              userAddress={address}
+              autoDecrypt={revealAll}
+            />
+          ))
+        )}
+      </div>
     </div>
   );
 }
