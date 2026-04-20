@@ -21,6 +21,7 @@ import { useClaimWinnings } from "@/hooks/useClaimWinnings";
 import { useApproveCUSDT } from "@/hooks/useCUSDT";
 import { useFHEEncrypt } from "@/hooks/useFHEVM";
 import { useOddsKeeper } from "@/hooks/useOddsKeeper";
+import { useUserDecrypt } from "@/hooks/useUserDecrypt";
 import { nullCastFactoryConfig } from "@/lib/contracts";
 import { CONTRACT_ADDRESSES } from "@/constants/addresses";
 import { useNullCastStore } from "@/lib/store";
@@ -129,6 +130,7 @@ export default function MarketDetailPage({
   const approveCUSDT = useApproveCUSDT();
   const fhe = useFHEEncrypt();
   const oddsKeeper = useOddsKeeper(hasAddress ? resolvedAddress : zeroAddr);
+  const userDecrypt = useUserDecrypt(hasAddress ? resolvedAddress : zeroAddr);
 
   /* ── Zustand store ──────────────────────────────────────────── */
   const addPosition = useNullCastStore((s) => s.addPosition);
@@ -163,8 +165,6 @@ export default function MarketDetailPage({
         : [],
     [storedPositions, resolvedAddress, hasAddress]
   );
-
-  const totalLocalAmount = localPositions.reduce((sum, p) => sum + p.amount, 0);
 
   const quickAmounts = [25, 50, 100, 250];
 
@@ -1340,76 +1340,135 @@ export default function MarketDetailPage({
                           color: "var(--color-text-secondary)",
                         }}
                       >
-                        Your position{localPositions.length > 1 ? "s" : ""}
+                        Your on-chain position
                       </span>
                       <LockIcon size={12} stroke="var(--color-privacy-text)" />
                     </div>
 
-                    {localPositions.length > 0 ? (
+                    {/* On-chain decrypted position */}
+                    {userDecrypt.isDecrypted ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                        {localPositions.map((pos, i) => (
-                          <div
-                            key={pos.txHash || i}
-                            style={{
-                              padding: "10px 12px",
-                              background: "var(--color-bg-base)",
-                              borderRadius: "var(--radius-sm)",
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                            }}
-                          >
+                        {userDecrypt.yesAmount !== null && userDecrypt.yesAmount > BigInt(0) && (
+                          <div style={{
+                            padding: "12px 14px",
+                            background: "var(--color-yes-muted)",
+                            borderRadius: "var(--radius-sm)",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            border: "1px solid rgba(74, 222, 128, 0.15)",
+                          }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <span className={`pill ${pos.side === "YES" ? "pill-yes" : "pill-no"}`}>
-                                {pos.side}
-                              </span>
-                              <span className="mono" style={{ fontSize: "var(--text-sm)" }}>
-                                {pos.amount} cUSDT
+                              <span className="pill pill-yes" style={{ fontWeight: 600 }}>YES</span>
+                              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>
+                                Total position
                               </span>
                             </div>
-                            <span
-                              className="mono"
-                              style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}
-                            >
-                              @ {pos.entryOdds}%
-                            </span>
-                          </div>
-                        ))}
-                        {localPositions.length > 1 && (
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              padding: "8px 12px",
-                              fontSize: "var(--text-xs)",
-                              color: "var(--color-text-secondary)",
-                              borderTop: "1px solid var(--color-border-subtle)",
-                            }}
-                          >
-                            <span>Total staked</span>
-                            <span className="mono" style={{ fontWeight: 500 }}>
-                              {totalLocalAmount} cUSDT
+                            <span className="mono encrypted-revealed" style={{ fontSize: "var(--text-md)", fontWeight: 500 }}>
+                              {(Number(userDecrypt.yesAmount) / 1e6).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", marginLeft: "4px" }}>cUSDT</span>
                             </span>
                           </div>
                         )}
+                        {userDecrypt.noAmount !== null && userDecrypt.noAmount > BigInt(0) && (
+                          <div style={{
+                            padding: "12px 14px",
+                            background: "var(--color-no-muted)",
+                            borderRadius: "var(--radius-sm)",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            border: "1px solid rgba(248, 113, 113, 0.15)",
+                          }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <span className="pill pill-no" style={{ fontWeight: 600 }}>NO</span>
+                              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>
+                                Total position
+                              </span>
+                            </div>
+                            <span className="mono encrypted-revealed" style={{ fontSize: "var(--text-md)", fontWeight: 500 }}>
+                              {(Number(userDecrypt.noAmount) / 1e6).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", marginLeft: "4px" }}>cUSDT</span>
+                            </span>
+                          </div>
+                        )}
+                        <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", marginTop: "4px" }}>
+                          Decrypted from on-chain via Zama KMS. Only you can see this.
+                        </p>
                       </div>
                     ) : (
-                      <p
-                        style={{
-                          fontSize: "var(--text-xs)",
-                          color: "var(--color-privacy-text)",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          padding: "10px 12px",
-                          background: "var(--color-privacy-muted)",
-                          borderRadius: "var(--radius-sm)",
-                        }}
-                      >
-                        <LockIcon size={12} stroke="var(--color-privacy-text)" />
-                        You have an encrypted position in this market. Your bet
-                        history is stored locally and will persist across sessions.
-                      </p>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                        <div
+                          style={{
+                            padding: "14px",
+                            background: "var(--color-privacy-muted)",
+                            borderRadius: "var(--radius-sm)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px",
+                          }}
+                        >
+                          <LockIcon size={14} stroke="var(--color-privacy-text)" />
+                          <div>
+                            <p style={{ fontSize: "var(--text-sm)", color: "var(--color-privacy-text)", fontWeight: 500, marginBottom: "2px" }}>
+                              {userDecrypt.hasYesPosition && "YES"}{userDecrypt.hasYesPosition && userDecrypt.hasNoPosition && " + "}{userDecrypt.hasNoPosition && "NO"} position encrypted on-chain
+                            </p>
+                            <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>
+                              Sign a message to decrypt your position amount via the Zama KMS.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={userDecrypt.decrypt}
+                          disabled={userDecrypt.isDecrypting}
+                          type="button"
+                          style={{ width: "100%" }}
+                        >
+                          <IconShield size={14} />
+                          {userDecrypt.isDecrypting ? "Decrypting via KMS..." : "Decrypt my position"}
+                        </button>
+                        {userDecrypt.error && (
+                          <p style={{ fontSize: "var(--text-xs)", color: "var(--color-no-text)" }}>
+                            {userDecrypt.error}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Local bet history */}
+                    {localPositions.length > 0 && (
+                      <div style={{ marginTop: "14px", borderTop: "1px solid var(--color-border-subtle)", paddingTop: "12px" }}>
+                        <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                          Bet history (local)
+                        </span>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "8px" }}>
+                          {localPositions.map((pos, i) => (
+                            <div
+                              key={pos.txHash || i}
+                              style={{
+                                padding: "8px 10px",
+                                background: "var(--color-bg-base)",
+                                borderRadius: "var(--radius-sm)",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                fontSize: "var(--text-xs)",
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <span className={`pill ${pos.side === "YES" ? "pill-yes" : "pill-no"}`} style={{ fontSize: "10px", padding: "1px 6px" }}>
+                                  {pos.side}
+                                </span>
+                                <span className="mono">{pos.amount} cUSDT</span>
+                              </div>
+                              <span className="mono" style={{ color: "var(--color-text-tertiary)" }}>
+                                @ {pos.entryOdds}%
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
