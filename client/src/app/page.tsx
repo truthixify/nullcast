@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useReadContract } from "wagmi";
 import { Icon } from "@/components/shared/Icons";
 import { PulseDot } from "@/components/shared/PulseDot";
+import { nullCastFactoryConfig, vaultFactoryConfig } from "@/lib/contracts";
 
 /* ── Stat component ───────────────────────────────────────── */
 function Stat({
@@ -50,6 +52,24 @@ function Stat({
       </div>
     </div>
   );
+}
+
+/* ── Live stats from on-chain ────────────────────────────── */
+function useProtocolStats() {
+  const { data: marketCount } = useReadContract({
+    ...nullCastFactoryConfig,
+    functionName: "getMarketCount",
+  });
+
+  const { data: vaultCount } = useReadContract({
+    ...vaultFactoryConfig,
+    functionName: "getVaultCount",
+  });
+
+  return {
+    markets: marketCount ? Number(marketCount) : 0,
+    vaults: vaultCount ? Number(vaultCount) : 0,
+  };
 }
 
 /* ── Ticker data ──────────────────────────────────────────── */
@@ -132,6 +152,7 @@ function LiveTicker() {
 /* ── LandingPage ──────────────────────────────────────────── */
 export default function LandingPage() {
   const [hoverTrade, setHoverTrade] = useState(false);
+  const stats = useProtocolStats();
 
   return (
     <div
@@ -195,19 +216,19 @@ export default function LandingPage() {
             </em>
           </h1>
 
-          {/* Subtitle */}
+          {/* Subtitle — mentions all features */}
           <p
             style={{
               marginTop: 28,
               fontSize: 17,
               color: "var(--ink-2)",
-              maxWidth: 560,
+              maxWidth: 620,
               lineHeight: 1.55,
             }}
           >
-            Prediction markets with encrypted positions. No one &mdash; not
-            other traders, not market makers, not us &mdash; sees your side or
-            size until you reveal it.
+            Encrypted positions on Zama fhEVM &mdash; no one sees your side or size.
+            Copy top predictors through strategy vaults, earn reputation to unlock
+            premium markets, and provide liquidity to earn fees. All with full privacy.
           </p>
 
           {/* Buttons */}
@@ -235,7 +256,7 @@ export default function LandingPage() {
               <Icon name="arrow-right" size={13} color="#1A1511" />
             </Link>
             <Link
-              href="/markets"
+              href="/vaults"
               style={{
                 padding: "13px 22px",
                 border: "1px solid var(--line-2)",
@@ -245,12 +266,12 @@ export default function LandingPage() {
                 textDecoration: "none",
               }}
             >
-              View markets
+              Copy strategies
             </Link>
           </div>
         </div>
 
-        {/* Stats bar */}
+        {/* Stats bar — real on-chain data */}
         <div
           style={{
             display: "grid",
@@ -262,14 +283,14 @@ export default function LandingPage() {
             maxWidth: 900,
           }}
         >
-          <Stat label="Total volume" value="$24.8M" />
-          <Stat label="Active markets" value="128" />
-          <Stat label="Bets placed" value="41,207" />
-          <Stat label="Avg. payout" value="1.87\u00D7" tone="gold" />
+          <Stat label="Live markets" value={stats.markets || "..."} />
+          <Stat label="Strategy vaults" value={stats.vaults || "..."} />
+          <Stat label="Encryption" value="FHE" tone="gold" />
+          <Stat label="Network" value="Sepolia" />
         </div>
       </section>
 
-      {/* Live ticker */}
+      {/* Live ticker marquee */}
       <div>
         <div
           style={{
