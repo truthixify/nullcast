@@ -34,7 +34,9 @@ const poolAbi = parseAbi([
 const vaultAbi = parseAbi([
   "function getTotalDepositsHandle() view returns (bytes32)",
   "function publicTotalDeposits() view returns (uint256)",
+  "function publicTotalShares() view returns (uint256)",
   "function setPublicTotalDeposits(uint256 value)",
+  "function setPublicTotalShares(uint256 value)",
   "function followerCount() view returns (uint256)",
   "function name() view returns (string)",
 ]);
@@ -255,13 +257,24 @@ export async function GET() {
         }
 
         try {
-          const txHash = await walletClient.writeContract({
+          // Set public total shares (decrypted from the handle)
+          const txShares = await walletClient.writeContract({
+            address: vaultAddr,
+            abi: vaultAbi,
+            functionName: "setPublicTotalShares",
+            args: [clearValue],
+          });
+          await publicClient.waitForTransactionReceipt({ hash: txShares });
+
+          // Also set public total deposits to same value for now
+          // (vault balance tracking requires reading encrypted cUSDT balance)
+          const txDeposits = await walletClient.writeContract({
             address: vaultAddr,
             abi: vaultAbi,
             functionName: "setPublicTotalDeposits",
             args: [clearValue],
           });
-          await publicClient.waitForTransactionReceipt({ hash: txHash });
+          await publicClient.waitForTransactionReceipt({ hash: txDeposits });
 
           const vaultName = await publicClient.readContract({
             address: vaultAddr,
@@ -272,7 +285,7 @@ export async function GET() {
           vaultResults.push({
             vaultId: v,
             vault: vaultAddr,
-            action: `${vaultName}: updated to ${Number(clearValue) / 1e6} cUSDT`,
+            action: `${vaultName}: shares=${Number(clearValue)}`,
           });
         } catch (err) {
           vaultResults.push({

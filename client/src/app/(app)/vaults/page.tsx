@@ -229,34 +229,35 @@ function VaultCard({ address }: { address: `0x${string}` }) {
           </div>
         </div>
 
-        {/* Manager: close button */}
-        {isManager && !isClosed && (
-          <button
-            className="btn secondary"
-            type="button"
-            onClick={handleClose}
-            disabled={isClosing || isCloseConfirming}
-            style={{ marginBottom: 12 }}
-          >
-            {isClosing
-              ? "Confirm in wallet..."
-              : isCloseConfirming
-                ? "Confirming..."
-                : "Close Vault"}
-          </button>
-        )}
-
-        {/* Deposit toggle */}
+        {/* Action buttons: deposit + close side by side */}
         {!isClosed && (
           <>
             {!showDeposit ? (
-              <button
-                className="btn primary block"
-                type="button"
-                onClick={() => setShowDeposit(true)}
-              >
-                Deposit
-              </button>
+              <div className="row gap-2" style={{ flexWrap: "wrap" }}>
+                <button
+                  className="btn primary"
+                  type="button"
+                  onClick={() => setShowDeposit(true)}
+                  style={{ flex: 1 }}
+                >
+                  Deposit
+                </button>
+                {isManager && (
+                  <button
+                    className="btn secondary"
+                    type="button"
+                    onClick={handleClose}
+                    disabled={isClosing || isCloseConfirming}
+                    style={{ flex: 1 }}
+                  >
+                    {isClosing
+                      ? "Confirm..."
+                      : isCloseConfirming
+                        ? "Closing..."
+                        : "Close Vault"}
+                  </button>
+                )}
+              </div>
             ) : (
               <div style={{ marginTop: 4 }}>
                 <div className="field" style={{ marginBottom: 10 }}>
