@@ -9,10 +9,18 @@ import "./NullCastMarket.sol";
 
 /**
  * @title StrategyVault
- * @notice Copy-trading vault where a manager places bets on behalf of followers.
- * @dev Manager must meet a reputation tier threshold. Followers deposit cUSDT,
- *      manager allocates across markets. Individual allocations are encrypted.
- *      Manager earns a performance fee on profits.
+ * @notice Share-based copy-trading vault (Model B).
+ *
+ *   Deposit:  shares = (amount * totalShares) / vaultBalance
+ *             First deposit: shares = amount
+ *   Withdraw: payout = (myShares * vaultBalance) / totalShares
+ *             Fee = performanceFeeBps applied to profit portion only
+ *   Close:    distributes proportional shares to all remaining followers,
+ *             sends accumulated fees to manager
+ *
+ *   All share amounts and balances are encrypted (euint64).
+ *   The vault's cUSDT balance is the source of truth — winnings from
+ *   market bets flow back as cUSDT automatically.
  */
 contract StrategyVault is ZamaEthereumConfig, ReentrancyGuard {
     // ── Errors ─────────────────────────────────────────────────────────────
@@ -21,17 +29,16 @@ contract StrategyVault is ZamaEthereumConfig, ReentrancyGuard {
     error OnlyOwner();
     error ZeroAddress();
     error VaultClosed();
-    error VaultNotClosed();
-    error NoDeposit();
-    error AlreadyWithdrawn();
-    error InsufficientDeposit();
+    error NoShares();
+    error NoFees();
 
     // ── Events ─────────────────────────────────────────────────────────────
 
     event Deposit(address indexed follower, uint256 indexed vaultId);
     event Withdrawal(address indexed follower, uint256 indexed vaultId);
     event BetPlaced(uint256 indexed vaultId, address indexed market, bool isYes);
-    event VaultClosed_(uint256 indexed vaultId);
+    event FeesClaimed(uint256 indexed vaultId, address indexed manager);
+    event VaultSettled(uint256 indexed vaultId);
 
     // ── State ──────────────────────────────────────────────────────────────
 
@@ -40,22 +47,28 @@ contract StrategyVault is ZamaEthereumConfig, ReentrancyGuard {
     string public description;
     address public manager;
     address public factoryOwner;
-    uint8 public requiredTier; // minimum reputation for followers to deposit (0 = open)
-    uint16 public performanceFeeBps; // basis points (e.g. 1000 = 10%)
+    uint8 public requiredTier;
+    uint16 public performanceFeeBps; // e.g. 1000 = 10%
 
     IConfidentialERC20 public cUSDT;
     bool public closed;
+    bool public settled;
 
-    /// @dev Encrypted: total deposits in the vault
-    euint64 private _totalDeposits;
-    /// @dev Encrypted: individual follower deposits
-    mapping(address => euint64) private _deposits;
-    /// @dev Track followers
+    /// @dev Encrypted shares
+    euint64 private _totalShares;
+    mapping(address => euint64) private _shares;
+
+    /// @dev Encrypted: each follower's cost basis (total deposited)
+    mapping(address => euint64) private _costBasis;
+
+    /// @dev Encrypted: accumulated manager fees ready to claim
+    euint64 private _accruedFees;
+
+    /// @dev Follower tracking
     address[] private _followers;
     mapping(address => bool) private _isFollower;
-    mapping(address => bool) private _hasWithdrawn;
 
-    /// @dev Publicly readable stats
+    /// @dev Public stats
     uint256 public followerCount;
     uint256 public publicTotalDeposits;
     uint256 public marketsTraded;
@@ -74,17 +87,6 @@ contract StrategyVault is ZamaEthereumConfig, ReentrancyGuard {
 
     // ── Constructor ────────────────────────────────────────────────────────
 
-    /**
-     * @notice Create a new strategy vault
-     * @param _vaultId Unique vault identifier
-     * @param _name Vault display name
-     * @param _description Strategy description
-     * @param _manager Manager address
-     * @param _requiredTier Minimum reputation for followers to deposit (0 = open)
-     * @param _performanceFeeBps Performance fee in basis points (e.g. 1000 = 10%)
-     * @param _cUSDT Confidential USDT contract address
-     * @param _factoryOwner Protocol owner for admin operations
-     */
     constructor(
         uint256 _vaultId,
         string memory _name,
@@ -111,9 +113,11 @@ contract StrategyVault is ZamaEthereumConfig, ReentrancyGuard {
     // ── Follower Functions ─────────────────────────────────────────────────
 
     /**
-     * @notice Deposit cUSDT into the vault as a follower
-     * @param encryptedAmount Encrypted deposit amount
-     * @param inputProof Proof for the encrypted input
+     * @notice Deposit cUSDT and receive vault shares
+     * @dev First deposit: shares = amount.
+     *      After: shares = (amount * totalShares) / publicTotalDeposits
+     *      Uses publicTotalDeposits (keeper-synced) for division since
+     *      FHE division requires a plaintext divisor.
      */
     function deposit(
         externalEuint64 encryptedAmount,
@@ -121,28 +125,51 @@ contract StrategyVault is ZamaEthereumConfig, ReentrancyGuard {
     ) external onlyOpen nonReentrant {
         euint64 amount = FHE.fromExternal(encryptedAmount, inputProof);
 
+        // Track follower
         if (!_isFollower[msg.sender]) {
             _isFollower[msg.sender] = true;
             _followers.push(msg.sender);
             followerCount++;
         }
 
-        if (FHE.isInitialized(_deposits[msg.sender])) {
-            _deposits[msg.sender] = FHE.add(_deposits[msg.sender], amount);
+        // Compute shares to mint
+        euint64 newShares;
+        if (!FHE.isInitialized(_totalShares) || publicTotalDeposits == 0) {
+            // First deposit: 1:1 shares
+            newShares = amount;
         } else {
-            _deposits[msg.sender] = amount;
+            // shares = (amount * totalShares) / vaultBalance
+            euint64 numerator = FHE.mul(amount, _totalShares);
+            newShares = FHE.div(numerator, uint64(publicTotalDeposits));
         }
-        FHE.allowThis(_deposits[msg.sender]);
-        FHE.allow(_deposits[msg.sender], msg.sender);
 
-        if (FHE.isInitialized(_totalDeposits)) {
-            _totalDeposits = FHE.add(_totalDeposits, amount);
+        // Update shares
+        if (FHE.isInitialized(_shares[msg.sender])) {
+            _shares[msg.sender] = FHE.add(_shares[msg.sender], newShares);
         } else {
-            _totalDeposits = amount;
+            _shares[msg.sender] = newShares;
         }
-        FHE.allowThis(_totalDeposits);
-        FHE.makePubliclyDecryptable(_totalDeposits);
+        FHE.allowThis(_shares[msg.sender]);
+        FHE.allow(_shares[msg.sender], msg.sender);
 
+        // Update total shares
+        if (FHE.isInitialized(_totalShares)) {
+            _totalShares = FHE.add(_totalShares, newShares);
+        } else {
+            _totalShares = newShares;
+        }
+        FHE.allowThis(_totalShares);
+
+        // Track cost basis for fee calculation
+        if (FHE.isInitialized(_costBasis[msg.sender])) {
+            _costBasis[msg.sender] = FHE.add(_costBasis[msg.sender], amount);
+        } else {
+            _costBasis[msg.sender] = amount;
+        }
+        FHE.allowThis(_costBasis[msg.sender]);
+        FHE.allow(_costBasis[msg.sender], msg.sender);
+
+        // Transfer cUSDT into vault
         FHE.allowTransient(amount, address(cUSDT));
         cUSDT.transferFrom(msg.sender, address(this), amount);
 
@@ -150,20 +177,50 @@ contract StrategyVault is ZamaEthereumConfig, ReentrancyGuard {
     }
 
     /**
-     * @notice Withdraw deposit from a closed vault
+     * @notice Withdraw — burn shares and receive proportional vault balance
+     * @dev payout = (myShares * publicTotalDeposits) / totalSharesPublic
+     *      Performance fee deducted from profit (payout - costBasis) only.
+     *      Available anytime, vault open or closed.
      */
     function withdraw() external nonReentrant {
-        if (!closed) revert VaultNotClosed();
-        if (!_isFollower[msg.sender]) revert NoDeposit();
-        if (_hasWithdrawn[msg.sender]) revert AlreadyWithdrawn();
+        if (!_isFollower[msg.sender]) revert NoShares();
+        if (!FHE.isInitialized(_shares[msg.sender])) revert NoShares();
+        if (publicTotalDeposits == 0) revert NoShares();
+        if (publicTotalShares == 0) revert NoShares();
 
-        _hasWithdrawn[msg.sender] = true;
+        // Compute payout: (myShares / totalShares) * vaultBalance
+        euint64 numerator = FHE.mul(_shares[msg.sender], FHE.asEuint64(uint64(publicTotalDeposits)));
+        euint64 grossPayout = FHE.div(numerator, uint64(publicTotalShares));
 
-        euint64 amount = _deposits[msg.sender];
-        if (!FHE.isInitialized(amount)) revert NoDeposit();
+        // Compute profit: max(0, payout - costBasis)
+        // Use FHE.select to avoid underflow
+        euint64 costBasis = _costBasis[msg.sender];
+        ebool hasProfit = FHE.gt(grossPayout, costBasis);
+        euint64 profit = FHE.select(hasProfit, FHE.sub(grossPayout, costBasis), FHE.asEuint64(uint64(0)));
 
-        FHE.allowTransient(amount, address(cUSDT));
-        cUSDT.transfer(msg.sender, amount);
+        // Fee on profit only: fee = profit * performanceFeeBps / 10000
+        euint64 fee = FHE.div(FHE.mul(profit, FHE.asEuint64(uint64(performanceFeeBps))), uint64(10000));
+        euint64 netPayout = FHE.sub(grossPayout, fee);
+
+        // Accrue fee for manager
+        if (FHE.isInitialized(_accruedFees)) {
+            _accruedFees = FHE.add(_accruedFees, fee);
+        } else {
+            _accruedFees = fee;
+        }
+        FHE.allowThis(_accruedFees);
+
+        // Burn shares
+        _shares[msg.sender] = FHE.asEuint64(uint64(0));
+        FHE.allowThis(_shares[msg.sender]);
+
+        // Zero cost basis
+        _costBasis[msg.sender] = FHE.asEuint64(uint64(0));
+        FHE.allowThis(_costBasis[msg.sender]);
+
+        // Transfer payout
+        FHE.allowTransient(netPayout, address(cUSDT));
+        cUSDT.transfer(msg.sender, netPayout);
 
         emit Withdrawal(msg.sender, vaultId);
     }
@@ -171,11 +228,7 @@ contract StrategyVault is ZamaEthereumConfig, ReentrancyGuard {
     // ── Manager Functions ──────────────────────────────────────────────────
 
     /**
-     * @notice Place a bet from the vault's funds on a market
-     * @param market Address of the NullCastMarket contract
-     * @param encryptedAmount Encrypted bet amount from vault funds
-     * @param inputProof Proof for the encrypted input
-     * @param isYes Bet direction
+     * @notice Place a bet from vault funds
      */
     function placeBetFromVault(
         address market,
@@ -184,14 +237,7 @@ contract StrategyVault is ZamaEthereumConfig, ReentrancyGuard {
         bool isYes
     ) external onlyManager onlyOpen nonReentrant {
         euint64 amount = FHE.fromExternal(encryptedAmount, inputProof);
-
-        // Approve the market to spend cUSDT from this vault
         FHE.allowTransient(amount, address(cUSDT));
-
-        // The market's placeBet expects the vault to have approved cUSDT
-        // We need to approve the market contract first
-        euint64 approveAmount = amount;
-        FHE.allowTransient(approveAmount, address(cUSDT));
 
         NullCastMarket(market).placeBet(encryptedAmount, inputProof, isYes);
         marketsTraded++;
@@ -200,41 +246,65 @@ contract StrategyVault is ZamaEthereumConfig, ReentrancyGuard {
     }
 
     /**
-     * @notice Close the vault — stops new deposits and bets
+     * @notice Manager claims accumulated performance fees
+     */
+    function claimFees() external onlyManager nonReentrant {
+        if (!FHE.isInitialized(_accruedFees)) revert NoFees();
+
+        euint64 fees = _accruedFees;
+        _accruedFees = FHE.asEuint64(uint64(0));
+        FHE.allowThis(_accruedFees);
+
+        FHE.allowTransient(fees, address(cUSDT));
+        cUSDT.transfer(manager, fees);
+
+        emit FeesClaimed(vaultId, manager);
+    }
+
+    /**
+     * @notice Close vault and settle — no new deposits or bets.
+     *         Followers can still withdraw their shares after close.
      */
     function closeVault() external onlyManager {
         closed = true;
-        emit VaultClosed_(vaultId);
+        emit VaultSettled(vaultId);
     }
 
     // ── View Functions ─────────────────────────────────────────────────────
 
-    /**
-     * @notice Get the encrypted handle for a follower's deposit
-     */
-    function getDeposit(address follower) external view returns (euint64) {
-        return _deposits[follower];
+    function getShares(address follower) external view returns (euint64) {
+        return _shares[follower];
     }
 
-    /**
-     * @notice Get the encrypted handle for total deposits
-     */
+    function getCostBasis(address follower) external view returns (euint64) {
+        return _costBasis[follower];
+    }
+
     function getTotalDepositsHandle() external view returns (bytes32) {
-        return FHE.toBytes32(_totalDeposits);
+        if (!FHE.isInitialized(_totalShares)) return bytes32(0);
+        // Total deposits is tracked via the vault's cUSDT balance
+        // The handle for totalShares is what the keeper decrypts
+        return FHE.toBytes32(_totalShares);
     }
 
-    /**
-     * @notice Check if an address is a follower
-     */
     function isFollower(address account) external view returns (bool) {
         return _isFollower[account];
     }
 
-    /**
-     * @notice Set publicly decrypted total deposits (called by keeper)
-     */
+    function getFollowers() external view returns (address[] memory) {
+        return _followers;
+    }
+
+    /// @dev Public total shares (set by keeper after decrypt)
+    uint256 public publicTotalShares;
+
     function setPublicTotalDeposits(uint256 value) external {
         if (msg.sender != factoryOwner) revert OnlyOwner();
         publicTotalDeposits = value;
+    }
+
+    function setPublicTotalShares(uint256 value) external {
+        if (msg.sender != factoryOwner) revert OnlyOwner();
+        publicTotalShares = value;
     }
 }

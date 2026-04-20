@@ -47,17 +47,12 @@
   },
   {
     "inputs": [],
-    "name": "AlreadyWithdrawn",
+    "name": "NoFees",
     "type": "error"
   },
   {
     "inputs": [],
-    "name": "InsufficientDeposit",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "NoDeposit",
+    "name": "NoShares",
     "type": "error"
   },
   {
@@ -94,11 +89,6 @@
   {
     "inputs": [],
     "name": "VaultClosed",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "VaultNotClosed",
     "type": "error"
   },
   {
@@ -163,9 +153,28 @@
         "internalType": "uint256",
         "name": "vaultId",
         "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "manager",
+        "type": "address"
       }
     ],
-    "name": "VaultClosed_",
+    "name": "FeesClaimed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
+      }
+    ],
+    "name": "VaultSettled",
     "type": "event"
   },
   {
@@ -198,6 +207,13 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "claimFees",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -298,7 +314,39 @@
         "type": "address"
       }
     ],
-    "name": "getDeposit",
+    "name": "getCostBasis",
+    "outputs": [
+      {
+        "internalType": "euint64",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getFollowers",
+    "outputs": [
+      {
+        "internalType": "address[]",
+        "name": "",
+        "type": "address[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "follower",
+        "type": "address"
+      }
+    ],
+    "name": "getShares",
     "outputs": [
       {
         "internalType": "euint64",
@@ -436,6 +484,19 @@
   },
   {
     "inputs": [],
+    "name": "publicTotalShares",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "requiredTier",
     "outputs": [
       {
@@ -458,6 +519,32 @@
     "name": "setPublicTotalDeposits",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "value",
+        "type": "uint256"
+      }
+    ],
+    "name": "setPublicTotalShares",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "settled",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
