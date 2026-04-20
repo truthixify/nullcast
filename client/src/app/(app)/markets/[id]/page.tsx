@@ -388,9 +388,10 @@ export default function MarketDetailPage({
       invalidateDecrypt(resolvedAddress);
       // Auto-decrypt position after bet to show updated total
       setTimeout(() => userDecrypt.refresh(), 3000);
-      // Trigger odds sync
-      fetch("/api/keeper").catch(() => {});
-      setTimeout(() => market.refetch(), 8000);
+      // Wait for RPC to reflect the new state, then fetch fresh odds from relayer.
+      // The relayer needs the updated handle to be readable, so we delay to avoid
+      // fetching stale pre-bet values.
+      setTimeout(() => market.refreshOdds(), 8000);
     }
     if (!isBetConfirmed) {
       prevBetConfirmed.current = false;
@@ -407,6 +408,7 @@ export default function MarketDetailPage({
     addPosition,
     invalidateDecrypt,
     market,
+    userDecrypt,
   ]);
 
   /* ── Claim handler ───────────────────────────────────────────── */
@@ -424,17 +426,14 @@ export default function MarketDetailPage({
   useEffect(() => {
     if (hasAddress && !hasSynced.current) {
       hasSynced.current = true;
-      fetch("/api/keeper").then(() => {
-        setTimeout(() => market.refetch(), 5000);
-      }).catch(() => {});
+      market.refreshOdds();
     }
   }, [hasAddress, market]);
 
   const handleSyncOdds = async () => {
     setIsSyncing(true);
     try {
-      await fetch("/api/keeper");
-      setTimeout(() => market.refetch(), 5000);
+      await market.refreshOdds();
     } catch { /* ignore */ }
     setIsSyncing(false);
   };
@@ -1515,7 +1514,7 @@ export default function MarketDetailPage({
                           fontSize: 12,
                           color: "var(--ink-3)",
                           flexShrink: 0,
-                          paddingLeft: 8,
+                          paddingLeft: 0,
                         }}
                       >
                         cUSDT

@@ -17,13 +17,6 @@ const RELAYER_URL = "https://relayer.testnet.zama.org/v2";
 const factoryAbi = parseAbi([
   "function getMarketCount() view returns (uint256)",
   "function getLiquidityPool(uint256 marketId) view returns (address)",
-  "function marketById(uint256) view returns (address)",
-]);
-
-const marketAbi = parseAbi([
-  "function getTotalYesPoolHandle() view returns (bytes32)",
-  "function getTotalNoPoolHandle() view returns (bytes32)",
-  "function submitOddsUpdate(uint256 clearYes, uint256 clearNo, bytes decryptionProof)",
 ]);
 
 const vaultFactoryAbi = parseAbi([
@@ -139,7 +132,9 @@ export async function GET() {
   });
 
   const results: Array<{ marketId: number; pool: string; action: string }> = [];
-  const oddsResults: Array<{ marketId: number; action: string }> = [];
+
+  // Track nonce explicitly to avoid "nonce too low" errors across sequential txs
+  let nonce = await publicClient.getTransactionCount({ address: account.address });
 
   try {
     const marketCount = await publicClient.readContract({
@@ -147,72 +142,6 @@ export async function GET() {
       abi: factoryAbi,
       functionName: "getMarketCount",
     });
-
-    // ── Update market odds ──────────────────────────────────────
-    for (let i = 0; i < Number(marketCount); i++) {
-      try {
-        const marketAddr = (await publicClient.readContract({
-          address: CONTRACT_ADDRESSES.NullCastFactory as `0x${string}`,
-          abi: factoryAbi,
-          functionName: "marketById",
-          args: [BigInt(i)],
-        })) as `0x${string}`;
-
-        if (!marketAddr || marketAddr === "0x0000000000000000000000000000000000000000") continue;
-
-        const yesHandle = (await publicClient.readContract({ address: marketAddr, abi: marketAbi, functionName: "getTotalYesPoolHandle" })) as `0x${string}`;
-        const noHandle = (await publicClient.readContract({ address: marketAddr, abi: marketAbi, functionName: "getTotalNoPoolHandle" })) as `0x${string}`;
-
-        if (yesHandle === ZERO_HANDLE && noHandle === ZERO_HANDLE) {
-          oddsResults.push({ marketId: i, action: "no bets" });
-          continue;
-        }
-
-        // Decrypt whichever handles are non-zero
-        const yesResult = yesHandle !== ZERO_HANDLE ? await publicDecryptViaRelayer(yesHandle) : null;
-        const noResult = noHandle !== ZERO_HANDLE ? await publicDecryptViaRelayer(noHandle) : null;
-
-        if (!yesResult && !noResult) {
-          oddsResults.push({ marketId: i, action: "decrypt failed" });
-          continue;
-        }
-
-        const yesVal = yesResult?.value ?? BigInt(0);
-        const noVal = noResult?.value ?? BigInt(0);
-
-        // Construct proof from KMS signatures
-        // The proof format is: numSigners (as first 32 bytes) + packed signatures + extraData
-        // Each signature is 65 bytes (r + s + v)
-        const sigs = yesResult?.signatures ?? noResult?.signatures ?? [];
-        const extraData = yesResult?.extraData ?? "0x";
-
-        // Build proof bytes: encode as the contract expects
-        // Format: abi.encodePacked(uint256 numSigners, bytes[] sigs, bytes extraData)
-        let proofHex = "0x";
-        if (sigs.length > 0) {
-          // Pack: numSigners (32 bytes) + each sig concatenated + extraData
-          const numSigners = sigs.length.toString(16).padStart(64, "0");
-          const sigsConcat = sigs.map(s => s.startsWith("0x") ? s.slice(2) : s).join("");
-          const extra = extraData.startsWith("0x") ? extraData.slice(2) : extraData;
-          proofHex = ("0x" + numSigners + sigsConcat + extra) as `0x${string}`;
-        }
-
-        try {
-          const txHash = await walletClient.writeContract({
-            address: marketAddr,
-            abi: marketAbi,
-            functionName: "submitOddsUpdate",
-            args: [yesVal, noVal, proofHex as `0x${string}`],
-          });
-          await publicClient.waitForTransactionReceipt({ hash: txHash });
-          oddsResults.push({ marketId: i, action: `updated YES=${Number(yesVal)/1e6} NO=${Number(noVal)/1e6}` });
-        } catch (submitErr) {
-          oddsResults.push({ marketId: i, action: `YES=${Number(yesVal)/1e6} NO=${Number(noVal)/1e6} (submit failed: ${(submitErr as Error).message?.slice(0,40)})` });
-        }
-      } catch (err) {
-        oddsResults.push({ marketId: i, action: `error: ${err instanceof Error ? err.message.slice(0, 60) : "unknown"}` });
-      }
-    }
 
     // ── Update LP pool totals ───────────────────────────────────
     for (let i = 0; i < Number(marketCount); i++) {
@@ -268,6 +197,7 @@ export async function GET() {
           abi: poolAbi,
           functionName: "setPublicTotalLiquidity",
           args: [decryptResult.value],
+          nonce: nonce++,
         });
 
         await publicClient.waitForTransactionReceipt({ hash: txHash });
@@ -278,6 +208,7 @@ export async function GET() {
           action: `updated to ${Number(decryptResult.value) / 1e6} cUSDT`,
         });
       } catch (err) {
+        nonce--; // Revert nonce on failure
         results.push({
           marketId: i,
           pool: poolAddr,
@@ -344,6 +275,7 @@ export async function GET() {
             abi: vaultAbi,
             functionName: "setPublicTotalShares",
             args: [vaultDecrypt.value],
+            nonce: nonce++,
           });
           await publicClient.waitForTransactionReceipt({ hash: txShares });
 
@@ -352,6 +284,7 @@ export async function GET() {
             abi: vaultAbi,
             functionName: "setPublicTotalDeposits",
             args: [vaultDecrypt.value],
+            nonce: nonce++,
           });
           await publicClient.waitForTransactionReceipt({ hash: txDeposits });
 
@@ -367,6 +300,7 @@ export async function GET() {
             action: `${vaultName}: shares=${Number(vaultDecrypt.value)}`,
           });
         } catch (err) {
+          nonce--; // Revert at least one nonce on failure
           vaultResults.push({
             vaultId: v,
             vault: vaultAddr,
@@ -389,7 +323,6 @@ export async function GET() {
       ok: true,
       timestamp: new Date().toISOString(),
       updated: totalUpdated,
-      odds: oddsResults,
       pools: results,
       vaults: vaultResults,
     });
