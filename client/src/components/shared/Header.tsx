@@ -121,6 +121,12 @@ export function Sidebar() {
 export function TopBar() {
   return (
     <div className="top-bar">
+      {/* Mobile brand — hidden on desktop via CSS */}
+      <div className="top-bar-brand" style={{ display: "none" }}>
+        <NullCastMark />
+        <span className="brand-text">NullCast</span>
+      </div>
+
       <button className="top-bar-search" type="button" onClick={() => (window as unknown as { openCommandPalette?: () => void }).openCommandPalette?.()}>
         <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Icon name="search" size={12} /> Search markets, addresses...

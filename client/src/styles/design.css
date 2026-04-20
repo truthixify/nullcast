@@ -895,11 +895,61 @@ hr.divider { border: 0; margin: 0; }
   .top-bar-search { display: none; }
   .top-bar-network { display: none !important; }
   .top-bar-wallet { display: block !important; }
-  .top-bar { justify-content: flex-end; padding: 0 16px; }
-  .page-container { padding-left: 20px !important; padding-right: 20px !important; padding-bottom: 90px !important; }
-  .detail-grid { grid-template-columns: 1fr !important; gap: 24px !important; }
-  .detail-grid aside { position: static !important; }
-  .stats-grid-4 { grid-template-columns: repeat(2, 1fr) !important; gap: 16px !important; }
+  .top-bar {
+    justify-content: space-between;
+    padding: 0 16px;
+  }
+  .top-bar-brand {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+  }
+  .top-bar-brand .brand-text {
+    font-family: var(--f-display);
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--ink-1);
+  }
+
+  /* Page padding */
+  .page-container { padding-left: 16px !important; padding-right: 16px !important; padding-bottom: 90px !important; }
+
+  /* Market detail: stack columns */
+  [style*="grid-template-columns: 1fr 380px"] {
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+  }
+  [style*="grid-template-columns: 1fr 380px"] > aside,
+  [style*="grid-template-columns: 1fr 380px"] > div:last-child {
+    position: static !important;
+  }
+
+  /* Stats: 2 cols */
+  [style*="grid-template-columns: repeat(4, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 16px !important;
+  }
+
+  /* Portfolio rows: stack on mobile */
+  [style*="grid-template-columns: 2fr 60px 120px 140px 120px"] {
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+    padding: 14px 16px !important;
+  }
+  [style*="grid-template-columns: 2fr 60px 120px 140px 120px"] > span:nth-child(n+3) {
+    font-size: 11px !important;
+  }
+
+  /* Meta grid: 2 cols */
+  [style*="grid-template-columns: repeat(4, 1fr)"][class*="mono"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Odds percentages: smaller */
+  [style*="fontSize: 30"] {
+    font-size: 22px !important;
+  }
+
   .ticker-track { animation-duration: 30s; }
 
   /* Vault/LP grids: single column on mobile */
@@ -907,9 +957,16 @@ hr.divider { border: 0; margin: 0; }
     grid-template-columns: 1fr !important;
   }
 
-  /* Portfolio table: horizontal scroll */
-  .portfolio-table { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .portfolio-table > div:not(:first-child) { min-width: 600px; }
+  /* Serif headings smaller */
+  h1.serif, [class*="serif"][style*="fontSize: 38"] {
+    font-size: 28px !important;
+  }
+  [style*="fontSize: 42"] {
+    font-size: 28px !important;
+  }
+
+  /* Page bottom padding for tab bar */
+  .page-in { padding-bottom: 90px !important; }
 
   /* old pages also need mobile padding */
   .page { padding-bottom: 110px; }
