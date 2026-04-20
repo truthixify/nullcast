@@ -93,6 +93,11 @@
   },
   {
     "inputs": [],
+    "name": "LiquidityPoolAlreadySet",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "MarketAlreadyResolved",
     "type": "error"
   },
@@ -679,6 +684,19 @@
   },
   {
     "inputs": [],
+    "name": "liquidityPool",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "marketId",
     "outputs": [
       {
@@ -903,6 +921,19 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_pool",
+        "type": "address"
+      }
+    ],
+    "name": "setLiquidityPool",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {

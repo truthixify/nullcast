@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "./NullCastMarket.sol";
+import "./LiquidityPool.sol";
 
 /**
  * @title NullCastFactory
@@ -28,10 +29,13 @@ contract NullCastFactory is Ownable, Pausable {
         uint256 expiryBlock
     );
 
+    event LiquidityPoolCreated(uint256 indexed marketId, address indexed poolAddress);
+
     // ── State ──────────────────────────────────────────────────────────────
 
     address[] public allMarkets;
     mapping(uint256 => address) public marketById;
+    mapping(uint256 => address) public liquidityPoolById;
     uint256 public marketCount;
     address public cUSDT;
     address public oracleAddress;
@@ -63,14 +67,7 @@ contract NullCastFactory is Ownable, Pausable {
     // ── Core Functions ─────────────────────────────────────────────────────
 
     /**
-     * @notice Create a new binary prediction market
-     * @param question Human-readable market question
-     * @param expiryBlock Block number after which no new bets are accepted
-     * @param minimumBet Minimum bet amount in cUSDT base units (6 decimals)
-     * @return marketAddress Address of the newly deployed market
-     */
-    /**
-     * @notice Create a new prediction market (binary or scalar)
+     * @notice Create a new prediction market (binary or scalar) with a paired liquidity pool
      * @param question Human-readable market question
      * @param expiryBlock Block number after which no new bets are accepted
      * @param minimumBet Minimum bet amount in cUSDT base units (6 decimals)
@@ -107,7 +104,20 @@ contract NullCastFactory is Ownable, Pausable {
         allMarkets.push(marketAddress);
         marketById[newMarketId] = marketAddress;
 
+        // Deploy a paired LiquidityPool for the market
+        LiquidityPool pool = new LiquidityPool(
+            newMarketId,
+            marketAddress,
+            owner(),
+            cUSDT
+        );
+        liquidityPoolById[newMarketId] = address(pool);
+
+        // Link the pool back to the market
+        market.setLiquidityPool(address(pool));
+
         emit MarketCreated(newMarketId, marketAddress, msg.sender, question, expiryBlock);
+        emit LiquidityPoolCreated(newMarketId, address(pool));
     }
 
     // ── View Functions ─────────────────────────────────────────────────────
@@ -117,6 +127,13 @@ contract NullCastFactory is Ownable, Pausable {
      */
     function getMarket(uint256 _marketId) external view returns (address) {
         return marketById[_marketId];
+    }
+
+    /**
+     * @notice Get the liquidity pool address for a given market ID
+     */
+    function getLiquidityPool(uint256 _marketId) external view returns (address) {
+        return liquidityPoolById[_marketId];
     }
 
     /**

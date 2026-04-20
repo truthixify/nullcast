@@ -133,6 +133,37 @@ describe("NullCastFactory", function () {
       expect(await market.oracle()).to.equal(oracle.address);
       expect(await market.status()).to.equal(0); // OPEN
     });
+
+    it("should deploy a LiquidityPool alongside each market", async function () {
+      const { factory, alice } = await deployFactory();
+      const currentBlock = await ethers.provider.getBlockNumber();
+
+      await factory.connect(alice).createMarket("Pool test?", currentBlock + 1000, 1_000_000, 0);
+
+      const poolAddr = await factory.getLiquidityPool(0);
+      expect(poolAddr).to.not.equal(ethers.ZeroAddress);
+
+      const marketAddr = await factory.getMarket(0);
+
+      // Verify the pool's market() returns the market address
+      const LiquidityPool = await ethers.getContractFactory("LiquidityPool");
+      const pool = LiquidityPool.attach(poolAddr);
+      expect(await pool.market()).to.equal(marketAddr);
+
+      // Verify the market's liquidityPool is set
+      const NullCastMarket = await ethers.getContractFactory("NullCastMarket");
+      const market = NullCastMarket.attach(marketAddr);
+      expect(await market.liquidityPool()).to.equal(poolAddr);
+    });
+
+    it("should emit LiquidityPoolCreated event", async function () {
+      const { factory, alice } = await deployFactory();
+      const currentBlock = await ethers.provider.getBlockNumber();
+
+      await expect(
+        factory.connect(alice).createMarket("LP event?", currentBlock + 1000, 1_000_000, 0)
+      ).to.emit(factory, "LiquidityPoolCreated");
+    });
   });
 
   describe("Admin", function () {

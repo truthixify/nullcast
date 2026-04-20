@@ -75,18 +75,20 @@ nullcast/
 
 | Contract | Address | Etherscan |
 |---|---|---|
-| MockcUSDT | `0x5cA829c43CEE20DD6534b8666b0C5d664b89fbd4` | [View](https://sepolia.etherscan.io/address/0x5cA829c43CEE20DD6534b8666b0C5d664b89fbd4#code) |
-| OracleMock | `0xbd185c4cFDE229F8C631D002CaD95EF62252456d` | [View](https://sepolia.etherscan.io/address/0xbd185c4cFDE229F8C631D002CaD95EF62252456d#code) |
-| ReputationGate | `0xe05B752FAef75f76a32168F42bB7B8DFd75a7773` | [View](https://sepolia.etherscan.io/address/0xe05B752FAef75f76a32168F42bB7B8DFd75a7773#code) |
-| NullCastFactory | `0xAa59241db65114aCF822475A8A42a079AE455a4e` | [View](https://sepolia.etherscan.io/address/0xAa59241db65114aCF822475A8A42a079AE455a4e#code) |
+| MockcUSDT | `0x5D59bc6f396fC1FAceAefD39cED413CEE0a655CD` | [View](https://sepolia.etherscan.io/address/0x5D59bc6f396fC1FAceAefD39cED413CEE0a655CD#code) |
+| OracleMock | `0x290F819259765Bb95E68bd31a092cBA965641390` | [View](https://sepolia.etherscan.io/address/0x290F819259765Bb95E68bd31a092cBA965641390#code) |
+| ReputationGate | `0x8a201504279f134e8133da87B3d0d5728A9635A7` | [View](https://sepolia.etherscan.io/address/0x8a201504279f134e8133da87B3d0d5728A9635A7#code) |
+| NullCastFactory | `0xdc0e034aCf1c911b621bFF4f1De678b207b7C95B` | [View](https://sepolia.etherscan.io/address/0xdc0e034aCf1c911b621bFF4f1De678b207b7C95B#code) |
+
+Each market automatically gets a paired LiquidityPool deployed by the Factory.
 
 ### Demo Markets
 
 | Market | Address | Type |
 |---|---|---|
-| BTC above $90k on Apr 30? | `0x639abd60524491a21422C710fE762D624282a1d3` | Binary |
-| ETH above $2k on May 5? | `0x73216fF89B18BA6E98E87Bae19112e9de047D077` | Binary |
-| BTC price range May 10 | `0x4DbCe10FB733cEE4640cd76E12686ac2F8066072` | Scalar (3 buckets) |
+| BTC above $90k on Apr 30? | `0x52c58a6E509B4228a517648247A7554Dd0ff52fE` | Binary |
+| ETH above $2k on May 5? | `0xB883ef0a6cdF3a070aEe886a1F68f2642a46EcE5` | Binary |
+| BTC price range May 10 | `0x2Cb8D5B162a5D726EFAF50e9a926F58AC44719df` | Scalar (3 buckets) |
 
 ---
 

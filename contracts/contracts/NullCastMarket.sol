@@ -47,6 +47,7 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
     error NotScalarMarket();
     error NotBinaryMarket();
     error InvalidBucketId(uint8 bucketId, uint8 bucketCount);
+    error LiquidityPoolAlreadySet();
 
     // ── Events ─────────────────────────────────────────────────────────────
 
@@ -113,6 +114,9 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
 
     /// @dev cUSDT token used for betting
     IConfidentialERC20 public cUSDT;
+
+    /// @dev Liquidity pool paired with this market
+    address public liquidityPool;
 
     /// @dev Optional reputation gate for participation tracking
     IReputationGate public reputationGate;
@@ -439,6 +443,19 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
         cUSDT.transfer(msg.sender, netWinnings);
 
         emit WinningsClaimed(msg.sender, marketId);
+    }
+
+    // ── Factory-Only Functions ────────────────────────────────────────────
+
+    /**
+     * @notice Set the paired liquidity pool address
+     * @dev Can only be called once by the factory after deployment
+     * @param _pool Address of the deployed LiquidityPool
+     */
+    function setLiquidityPool(address _pool) external onlyFactory {
+        if (liquidityPool != address(0)) revert LiquidityPoolAlreadySet();
+        if (_pool == address(0)) revert ZeroAddress();
+        liquidityPool = _pool;
     }
 
     // ── Admin Functions ────────────────────────────────────────────────────
