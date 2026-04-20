@@ -13,9 +13,11 @@ import {
 } from "@/hooks/useLiquidity";
 import { useApproveCUSDT } from "@/hooks/useCUSDT";
 import { useFHEEncrypt } from "@/hooks/useFHEVM";
+import { useSignTypedData } from "wagmi";
+import { getRelayer } from "@/lib/fhevm";
 import { nullCastFactoryConfig } from "@/lib/contracts";
 import { CONTRACT_ADDRESSES } from "@/constants/addresses";
-import { Icon } from "@/components/shared/Icons";
+import LiquidityPoolABI from "@/constants/abis/LiquidityPool.json";
 import { GlowCard } from "@/components/shared/GlowCard";
 import { CipherReveal } from "@/components/shared/CipherReveal";
 
@@ -41,11 +43,9 @@ function fmtUSD(v: number): string {
 function MarketLPCard({
   marketAddress,
   marketIndex,
-  reveal,
 }: {
   marketAddress: `0x${string}`;
   marketIndex: number;
-  reveal: boolean;
 }) {
   const { address: userAddress } = useAccount();
   const { question, isLoading: isMarketLoading } = useMarket(marketAddress);
@@ -63,7 +63,7 @@ function MarketLPCard({
 
   /* ── Pool stats ────────────────────────────────────────────── */
   const zeroAddr = "0x0000000000000000000000000000000000000000" as `0x${string}`;
-  const { totalLiquidity, lpCount } = useLiquidityPool(
+  const { totalLiquidity } = useLiquidityPool(
     isZeroPool ? zeroAddr : poolAddress
   );
 
@@ -79,6 +79,61 @@ function MarketLPCard({
   const claimFees = useClaimLPFees(isZeroPool ? zeroAddr : poolAddress);
   const approveCUSDT = useApproveCUSDT();
   const fhe = useFHEEncrypt();
+
+  /* ── LP share decrypt ──────────────────────────────────────── */
+  const { signTypedDataAsync } = useSignTypedData();
+  const [shareDecrypted, setShareDecrypted] = useState<string | null>(null);
+  const [isDecrypting, setIsDecrypting] = useState(false);
+
+  // Read LP share handle
+  const { data: shareHandle } = useReadContract({
+    address: isZeroPool ? zeroAddr : poolAddress,
+    abi: LiquidityPoolABI,
+    functionName: "getLPShares",
+    args: userAddress ? [userAddress] : undefined,
+    query: { enabled: !!userAddress && isLP === true },
+  });
+
+  const handleDecryptShare = useCallback(async () => {
+    if (!userAddress || !poolAddress || !shareHandle) return;
+    const handleHex = shareHandle as `0x${string}`;
+    if (handleHex === zeroAddr + "0".repeat(24)) return;
+
+    setIsDecrypting(true);
+    try {
+      const relayer = await getRelayer();
+      const keypair = await relayer.generateKeypair();
+      const startTimestamp = Math.floor(Date.now() / 1000);
+      const eip712 = await relayer.createEIP712(keypair.publicKey, [poolAddress], startTimestamp, 1);
+      const primaryType = eip712.primaryType || Object.keys(eip712.types).find((k: string) => k !== "EIP712Domain") || "UserDecryptRequestVerification";
+
+      const signature = await signTypedDataAsync({
+        types: eip712.types as Record<string, Array<{ name: string; type: string }>>,
+        primaryType,
+        domain: eip712.domain as { name: string; version: string; chainId: number; verifyingContract: `0x${string}` },
+        message: eip712.message as Record<string, unknown>,
+      });
+
+      const result = await relayer.userDecrypt({
+        handles: [handleHex],
+        contractAddress: poolAddress,
+        signedContractAddresses: [poolAddress],
+        privateKey: keypair.privateKey,
+        publicKey: keypair.publicKey,
+        signature,
+        signerAddress: userAddress,
+        startTimestamp,
+        durationDays: 1,
+      });
+
+      const val = result[handleHex] as bigint;
+      setShareDecrypted((Number(val) / 1e6).toFixed(2));
+    } catch {
+      // User rejected or KMS error
+    } finally {
+      setIsDecrypting(false);
+    }
+  }, [userAddress, poolAddress, shareHandle, signTypedDataAsync]);
 
   /* ── Local state ───────────────────────────────────────────── */
   const [amount, setAmount] = useState("100");
@@ -156,8 +211,6 @@ function MarketLPCard({
     );
   }
 
-  const shareAmount = isLP ? (totalLiquidity / Math.max(lpCount, 1)) : 0;
-  const sharePct = totalLiquidity > 0 ? (shareAmount / totalLiquidity * 100) : 0;
 
   return (
     <GlowCard style={{ padding: 22 }}>
@@ -185,23 +238,35 @@ function MarketLPCard({
           </div>
           <div className="mono" style={{ fontSize: 20, color: isLP ? "var(--ink-1)" : "var(--ink-3)", letterSpacing: "-0.01em" }}>
             {isLP ? (
-              shareAmount > 0 ? (
+              shareDecrypted ? (
                 <>
-                  <CipherReveal value={shareAmount.toFixed(2)} reveal={reveal} width={7} />
+                  <CipherReveal value={shareDecrypted} reveal={true} width={7} />
                   <span style={{ color: "var(--ink-3)", fontSize: 11, marginLeft: 6 }}>cUSDT</span>
                 </>
               ) : (
-                <span style={{ fontSize: 13, color: "var(--ink-3)" }}>Sync to reveal</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 14, letterSpacing: "0.1em", color: "var(--ink-3)" }}>••••••</span>
+                  <button
+                    onClick={handleDecryptShare}
+                    disabled={isDecrypting}
+                    style={{
+                      fontSize: 11,
+                      padding: "4px 10px",
+                      border: "1px solid var(--gold-dim)",
+                      borderRadius: 3,
+                      color: "var(--gold)",
+                      cursor: "pointer",
+                      background: "transparent",
+                    }}
+                  >
+                    {isDecrypting ? "Decrypting..." : "Decrypt"}
+                  </button>
+                </span>
               )
             ) : (
               <span style={{ fontSize: 14 }}>&mdash;</span>
             )}
           </div>
-          {isLP && reveal && (
-            <div className="mono" style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 4 }}>
-              {sharePct.toFixed(3)}% of pool
-            </div>
-          )}
         </div>
         <div>
           <div style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 6 }}>
@@ -387,7 +452,6 @@ function MarketLPCard({
 
 export default function LiquidityPage() {
   const { allMarkets, isLoading } = useFactoryMarkets();
-  const [reveal, setReveal] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
   const handleSync = async () => {
@@ -403,25 +467,6 @@ export default function LiquidityPage() {
         <h1 className="serif" style={{ fontSize: 38, fontWeight: 500, letterSpacing: "-0.02em" }}>
           Liquidity
         </h1>
-        <button
-          onClick={() => setReveal(true)}
-          disabled={reveal}
-          style={{
-            fontSize: 12,
-            padding: "8px 14px",
-            border: `1px solid ${reveal ? "var(--line)" : "var(--gold-dim)"}`,
-            borderRadius: 3,
-            color: reveal ? "var(--ink-3)" : "var(--gold)",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            background: "transparent",
-            cursor: reveal ? "default" : "pointer",
-          }}
-        >
-          <Icon name="eye" size={12} />
-          {reveal ? "Revealed" : "Reveal shares"}
-        </button>
         <button
           onClick={handleSync}
           disabled={syncing}
@@ -454,7 +499,6 @@ export default function LiquidityPage() {
               key={addr}
               marketAddress={addr}
               marketIndex={i}
-              reveal={reveal}
             />
           ))}
         </div>
