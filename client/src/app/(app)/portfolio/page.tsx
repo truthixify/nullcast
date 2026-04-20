@@ -8,11 +8,12 @@ import { useClaimWinnings } from "@/hooks/useClaimWinnings";
 import { useNullCastStore } from "@/lib/store";
 import {
   LockIcon,
-  IconChevronRight,
-  IconChart,
-  IconCheck,
-  IconWallet,
+  LockOpenIcon,
+  CheckIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
 } from "@/components/shared/Icons";
+import { EncryptedValue } from "@/components/shared/EncryptedValue";
 
 /* ── MarketStatus enum matching contract ─────────────────────── */
 const MarketStatus: Record<number, string> = {
@@ -22,48 +23,24 @@ const MarketStatus: Record<number, string> = {
 };
 
 /* ── Stat card ───────────────────────────────────────────────── */
-interface StatCardProps {
-  label: string;
-  value: string | number;
-  valueColor?: string;
-  mono?: boolean;
-  encrypted?: boolean;
-}
-
-function StatCard({
+function Stat({
   label,
-  value,
-  valueColor,
-  mono = true,
-  encrypted = false,
-}: StatCardProps) {
+  children,
+  sub,
+}: {
+  label: string;
+  children: React.ReactNode;
+  sub?: string;
+}) {
   return (
-    <div className="card" style={{ padding: 20 }}>
-      <div
-        style={{
-          fontSize: 11,
-          color: "var(--color-text-tertiary)",
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
-          fontWeight: 500,
-          marginBottom: 10,
-        }}
-      >
-        {label}
+    <div className="card" style={{ padding: 16 }}>
+      <span className="eyebrow">{label}</span>
+      <div className="mono" style={{ fontSize: 22, fontWeight: 600, marginTop: 8 }}>
+        {children}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span
-          className={mono ? "mono" : ""}
-          style={{
-            fontSize: 22,
-            fontWeight: 600,
-            color: valueColor || "var(--color-text-primary)",
-          }}
-        >
-          {value}
-        </span>
-        {encrypted && <LockIcon size={14} stroke="var(--color-privacy)" />}
-      </div>
+      {sub && (
+        <div style={{ fontSize: 12, color: "var(--t-3)", marginTop: 4 }}>{sub}</div>
+      )}
     </div>
   );
 }
@@ -88,68 +65,65 @@ function PositionRow({
 
   const isResolved = status === 2;
   const statusLabel = status !== undefined ? MarketStatus[status] ?? "UNKNOWN" : "...";
+  const delta = yesOdds !== undefined ? yesOdds - 50 : 0;
 
   return (
-    <tr className="interactive">
+    <tr>
       <td>
-        <div style={{ fontWeight: 500 }}>
+        <div style={{ fontWeight: 500, color: "var(--t-1)" }}>
           {isMarketLoading ? "Loading..." : question ?? "Unknown market"}
         </div>
-        <div
-          style={{
-            fontSize: 11,
-            color: "var(--color-text-tertiary)",
-            marginTop: 2,
-            fontFamily: "var(--font-mono)",
-          }}
-        >
+        <span className="mono" style={{ fontSize: 11, color: "var(--t-4)" }}>
           {marketAddress.slice(0, 6)}...{marketAddress.slice(-4)}
-        </div>
+        </span>
+      </td>
+      <td>
+        {storePosition ? (
+          <span className={`pill ${storePosition.side === "YES" ? "yes" : "no"}`}>
+            {storePosition.side}
+          </span>
+        ) : (
+          <span style={{ color: "var(--t-4)" }}>--</span>
+        )}
+      </td>
+      <td>
+        <EncryptedValue state="hidden" unit="cUSDT" compact />
+      </td>
+      <td>
+        <span className="mono" style={{ fontSize: 13, color: "var(--t-2)" }}>
+          {isMarketLoading ? "..." : `${yesOdds}%`}
+        </span>
+      </td>
+      <td>
+        {!isMarketLoading && (
+          <span
+            className="row gap-2 mono"
+            style={{
+              fontSize: 13,
+              color: delta > 0 ? "var(--yes-hi)" : delta < 0 ? "var(--no-hi)" : "var(--t-3)",
+            }}
+          >
+            {delta > 0 ? (
+              <ArrowUpIcon size={12} />
+            ) : delta < 0 ? (
+              <ArrowDownIcon size={12} />
+            ) : null}
+            {delta > 0 ? "+" : ""}
+            {delta}%
+          </span>
+        )}
       </td>
       <td>
         <span
-          className={`pill ${statusLabel === "OPEN" ? "pill-yes" : statusLabel === "RESOLVED" ? "pill-no" : ""}`}
+          className={`pill ${statusLabel === "OPEN" ? "open" : statusLabel === "RESOLVED" ? "resolved" : ""}`}
         >
           {statusLabel}
         </span>
       </td>
       <td>
-        {storePosition ? (
-          <span className={`pill ${storePosition.side === "YES" ? "pill-yes" : "pill-no"}`}>
-            {storePosition.side}
-          </span>
-        ) : (
-          <span style={{ color: "var(--color-text-tertiary)", fontSize: 13 }}>--</span>
-        )}
-      </td>
-      <td>
-        {/* Position amounts are encrypted (euint64) — show encrypted UX */}
-        <span
-          className="mono"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            color: "var(--color-privacy-text)",
-          }}
-        >
-          <LockIcon size={12} stroke="var(--color-privacy)" />
-          <span style={{ letterSpacing: "0.15em", fontSize: 13 }}>
-            encrypted
-          </span>
-        </span>
-      </td>
-      <td>
-        <span className="mono" style={{ color: "var(--color-text-secondary)" }}>
-          {isMarketLoading ? "..." : `${yesOdds}%`}
-        </span>
-      </td>
-      <td>
         {isResolved ? (
           <ClaimButton marketAddress={marketAddress} />
-        ) : (
-          <IconChevronRight size={16} stroke="var(--color-text-tertiary)" />
-        )}
+        ) : null}
       </td>
     </tr>
   );
@@ -166,17 +140,8 @@ function ClaimButton({ marketAddress }: { marketAddress: `0x${string}` }) {
 
   if (isConfirmed) {
     return (
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 4,
-          color: "var(--color-yes-text)",
-          fontSize: 13,
-          fontWeight: 500,
-        }}
-      >
-        <IconCheck size={12} stroke="var(--color-yes-text)" />
+      <span className="row gap-2" style={{ color: "var(--yes-hi)", fontSize: 12, fontWeight: 500 }}>
+        <CheckIcon size={12} />
         Claimed
       </span>
     );
@@ -184,19 +149,11 @@ function ClaimButton({ marketAddress }: { marketAddress: `0x${string}` }) {
 
   return (
     <button
-      className="btn btn-sm btn-primary"
+      className="btn primary sm"
       onClick={claimWinnings}
       disabled={isWriting || isConfirming}
-      style={{
-        opacity: isWriting || isConfirming ? 0.6 : 1,
-        fontSize: 12,
-      }}
     >
-      {isWriting
-        ? "Confirm..."
-        : isConfirming
-          ? "Claiming..."
-          : "Claim"}
+      {isWriting ? "Confirm..." : isConfirming ? "Claiming..." : "Claim"}
     </button>
   );
 }
@@ -211,9 +168,7 @@ function MarketPositionCheck({
 }) {
   const hasPos = useHasPosition(marketAddress, userAddress);
 
-  // Report back that we have a position (for counting)
   if (hasPos === true) {
-    // Use a ref-safe way to report — check in the parent via state
     return <PositionRow marketAddress={marketAddress} userAddress={userAddress} />;
   }
 
@@ -228,326 +183,235 @@ export default function PortfolioPage() {
 
   const [activeTab, setActiveTab] = useState<"active" | "settled" | "lp">("active");
 
-  // Not connected state
+  // Not connected
   if (!isConnected || !address) {
     return (
-      <div className="container" style={{ paddingTop: 48, paddingBottom: 80 }}>
-        <div style={{ marginBottom: 32 }}>
-          <h1 className="display" style={{ fontSize: 36, letterSpacing: "-0.04em" }}>
-            Portfolio
-          </h1>
-        </div>
-        <div
-          className="card"
-          style={{
-            padding: "64px 32px",
-            textAlign: "center",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 16,
-          }}
-        >
-          <IconWallet size={32} stroke="var(--color-text-tertiary)" />
-          <p
+      <div className="page">
+        <div className="container">
+          <div className="page-head" style={{ padding: 0, marginBottom: 32 }}>
+            <h1 style={{ fontSize: 36 }}>Portfolio</h1>
+          </div>
+          <div
+            className="card elevated"
             style={{
-              fontSize: 15,
-              fontWeight: 500,
-              color: "var(--color-text-secondary)",
+              padding: "64px 32px",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 16,
             }}
           >
-            Connect your wallet to view your portfolio
-          </p>
-          <p
-            style={{
-              fontSize: 13,
-              color: "var(--color-text-tertiary)",
-              maxWidth: 360,
-              lineHeight: 1.5,
-            }}
-          >
-            Your positions are encrypted on-chain. Only your wallet can decrypt them.
-          </p>
+            <LockIcon size={32} />
+            <p style={{ fontSize: 15, fontWeight: 500, color: "var(--t-2)" }}>
+              Connect your wallet to view your portfolio
+            </p>
+            <p style={{ fontSize: 13, color: "var(--t-3)", maxWidth: 360 }}>
+              Your positions are encrypted on-chain. Only your wallet can decrypt them.
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Collect market addresses where user has a cached position in the store
+  const tabs = [
+    { key: "active" as const, label: "Active" },
+    { key: "settled" as const, label: "Settled" },
+    { key: "lp" as const, label: "LP" },
+  ];
+
   return (
-    <div className="container" style={{ paddingTop: 48, paddingBottom: 80 }}>
-      {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: 32,
-        }}
-      >
-        <div>
-          <h1 className="display" style={{ fontSize: 36, letterSpacing: "-0.04em" }}>
-            Portfolio
-          </h1>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              marginTop: 8,
-              color: "var(--color-privacy-text)",
-              fontSize: 13,
-            }}
-          >
-            <LockIcon size={14} stroke="var(--color-privacy)" />
-            Your positions are encrypted. Only you can decrypt them via FHEVM SDK.
+    <div className="page">
+      <div className="container">
+        {/* Header */}
+        <div className="row between" style={{ marginBottom: 32 }}>
+          <div className="page-head" style={{ padding: 0 }}>
+            <h1 style={{ fontSize: 36 }}>Portfolio</h1>
+            <p className="sub">
+              Your positions are encrypted. Only you can decrypt them.
+            </p>
           </div>
+          <button className="btn secondary">
+            <LockOpenIcon size={14} />
+            Decrypt all
+          </button>
         </div>
-      </div>
 
-      {/* Stat cards */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 12,
-          marginBottom: 32,
-        }}
-      >
-        <StatCard
-          label="Markets checked"
-          value={isMarketsLoading ? "..." : allMarkets.length}
-          mono={false}
-        />
-        <StatCard
-          label="Cached positions"
-          value={storePositions.length}
-          mono={false}
-        />
-        <StatCard label="Total at stake" value="****" encrypted />
-        <StatCard label="Unrealized P&L" value="****" encrypted />
-      </div>
+        {/* Stats */}
+        <div className="grid-4" style={{ marginBottom: 32 }}>
+          <Stat label="Active positions" sub="On-chain">
+            {isMarketsLoading ? "..." : storePositions.length}
+          </Stat>
+          <Stat label="Total at stake" sub="Encrypted">
+            <EncryptedValue state="hidden" unit="cUSDT" compact />
+          </Stat>
+          <Stat label="Unrealized P&L" sub="Encrypted">
+            <EncryptedValue state="hidden" unit="cUSDT" compact />
+          </Stat>
+          <Stat label="Claimable" sub="Resolved markets">
+            <span className="mono">0</span>
+          </Stat>
+        </div>
 
-      {/* Tabs */}
-      <div
-        style={{
-          borderBottom: "1px solid var(--color-border-subtle)",
-          display: "flex",
-          marginBottom: 0,
-        }}
-      >
-        <button
-          className={`tab${activeTab === "active" ? " tab--active" : ""}`}
-          onClick={() => setActiveTab("active")}
-        >
-          Active
-        </button>
-        <button
-          className={`tab${activeTab === "settled" ? " tab--active" : ""}`}
-          onClick={() => setActiveTab("settled")}
-        >
-          Settled
-        </button>
-        <button
-          className={`tab${activeTab === "lp" ? " tab--active" : ""}`}
-          onClick={() => setActiveTab("lp")}
-        >
-          LP Positions
-        </button>
-      </div>
-
-      {/* Tab content */}
-      <div className="card" style={{ borderRadius: "0 0 14px 14px", padding: 0 }}>
-        {activeTab === "active" && (
-          <>
-            {isMarketsLoading ? (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "60px 20px",
-                  gap: 12,
-                }}
+        {/* Tabs card */}
+        <div className="card" style={{ padding: 0 }}>
+          {/* Tab header */}
+          <div
+            style={{
+              display: "flex",
+              gap: 4,
+              padding: "8px 16px 0",
+              borderBottom: "1px solid var(--border-1)",
+            }}
+          >
+            {tabs.map((t) => (
+              <button
+                key={t.key}
+                className={`btn sm ${activeTab === t.key ? "primary" : "ghost"}`}
+                onClick={() => setActiveTab(t.key)}
+                style={{ marginBottom: -1 }}
               >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Active tab */}
+          {activeTab === "active" && (
+            <>
+              {isMarketsLoading ? (
                 <div
+                  className="row"
                   style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: "50%",
-                    border: "2px solid var(--color-accent)",
-                    borderTopColor: "transparent",
-                    animation: "spin 1s linear infinite",
-                  }}
-                />
-                <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
-                  Loading markets...
-                </span>
-              </div>
-            ) : allMarkets.length === 0 ? (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "80px 20px",
-                  gap: 16,
-                }}
-              >
-                <div
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: 14,
-                    background: "var(--color-bg-overlay)",
-                    display: "flex",
-                    alignItems: "center",
                     justifyContent: "center",
+                    padding: "60px 20px",
+                    gap: 12,
                   }}
                 >
-                  <IconChart size={24} stroke="var(--color-text-tertiary)" />
+                  <span
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: "50%",
+                      border: "2px solid var(--acc)",
+                      borderTopColor: "transparent",
+                      animation: "spin 1s linear infinite",
+                    }}
+                  />
+                  <span style={{ fontSize: 13, color: "var(--t-2)" }}>
+                    Loading markets...
+                  </span>
                 </div>
-                <div style={{ fontSize: 15, fontWeight: 500, color: "var(--color-text-secondary)" }}>
-                  No markets found
-                </div>
+              ) : allMarkets.length === 0 ? (
                 <div
                   style={{
-                    fontSize: 13,
-                    color: "var(--color-text-tertiary)",
-                    maxWidth: 320,
+                    padding: "80px 20px",
                     textAlign: "center",
-                    lineHeight: 1.5,
+                    color: "var(--t-3)",
+                    fontSize: 13,
                   }}
                 >
-                  No markets have been created yet. Create a market or place a bet to see your positions here.
+                  No markets found. Place a bet to see your positions here.
                 </div>
-              </div>
-            ) : (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Market</th>
-                    <th>Status</th>
-                    <th>Side</th>
-                    <th>Position</th>
-                    <th>Odds</th>
-                    <th style={{ width: 80 }} />
-                  </tr>
-                </thead>
-                <tbody>
-                  {allMarkets.map((addr) => (
-                    <MarketPositionCheck
-                      key={addr}
-                      marketAddress={addr}
-                      userAddress={address}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            )}
+              ) : (
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Market</th>
+                      <th>Side</th>
+                      <th>Position</th>
+                      <th>Entry</th>
+                      <th>Current</th>
+                      <th>Status</th>
+                      <th style={{ width: 80 }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allMarkets.map((addr) => (
+                      <MarketPositionCheck
+                        key={addr}
+                        marketAddress={addr}
+                        userAddress={address}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              )}
 
-            {/* Note about empty results */}
-            {!isMarketsLoading && allMarkets.length > 0 && (
+              {!isMarketsLoading && allMarkets.length > 0 && (
+                <div
+                  className="row gap-2"
+                  style={{
+                    padding: "10px 16px",
+                    borderTop: "1px solid var(--border-1)",
+                    fontSize: 11,
+                    color: "var(--t-4)",
+                  }}
+                >
+                  <LockIcon size={10} />
+                  Checking {allMarkets.length} market(s) for positions. Markets with no position are hidden.
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Settled tab */}
+          {activeTab === "settled" && (
+            <div
+              style={{
+                padding: "80px 20px",
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <CheckIcon size={24} />
+              <span style={{ fontSize: 14, fontWeight: 500, color: "var(--t-2)" }}>
+                No settled positions yet
+              </span>
+              <span style={{ fontSize: 12, color: "var(--t-3)", maxWidth: 320 }}>
+                Resolved markets where you claimed winnings will appear here.
+              </span>
+            </div>
+          )}
+
+          {/* LP tab */}
+          {activeTab === "lp" && (
+            <div
+              style={{
+                padding: "80px 20px",
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
               <div
                 style={{
-                  padding: "12px 20px",
-                  borderTop: "1px solid var(--color-border-subtle)",
-                  fontSize: 12,
-                  color: "var(--color-text-tertiary)",
+                  width: 56,
+                  height: 56,
+                  borderRadius: "50%",
+                  border: "2px dashed var(--border-2)",
                   display: "flex",
                   alignItems: "center",
-                  gap: 6,
+                  justifyContent: "center",
                 }}
               >
-                <LockIcon size={11} stroke="var(--color-text-tertiary)" />
-                Checking {allMarkets.length} market(s) for your positions via hasPosition(). Markets with no position are hidden.
+                <LockIcon size={22} />
               </div>
-            )}
-          </>
-        )}
-
-        {activeTab === "settled" && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "80px 20px",
-              gap: 16,
-            }}
-          >
-            <div
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: 14,
-                background: "var(--color-bg-overlay)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <IconCheck size={24} stroke="var(--color-text-tertiary)" />
+              <span style={{ fontSize: 14, fontWeight: 500, color: "var(--t-2)" }}>
+                No liquidity positions yet
+              </span>
+              <span style={{ fontSize: 12, color: "var(--t-3)", maxWidth: 320 }}>
+                Provide liquidity to markets and earn fees from trading activity.
+              </span>
             </div>
-            <div style={{ fontSize: 15, fontWeight: 500, color: "var(--color-text-secondary)" }}>
-              No settled positions yet
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                color: "var(--color-text-tertiary)",
-                maxWidth: 320,
-                textAlign: "center",
-                lineHeight: 1.5,
-              }}
-            >
-              Once markets you participated in are resolved and you claim your winnings, they will appear here.
-            </div>
-          </div>
-        )}
-
-        {activeTab === "lp" && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "80px 20px",
-              gap: 16,
-            }}
-          >
-            <div
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: 14,
-                background: "var(--color-bg-overlay)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <IconChart size={24} stroke="var(--color-text-tertiary)" />
-            </div>
-            <div style={{ fontSize: 15, fontWeight: 500, color: "var(--color-text-secondary)" }}>
-              No LP positions yet
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                color: "var(--color-text-tertiary)",
-                maxWidth: 320,
-                textAlign: "center",
-                lineHeight: 1.5,
-              }}
-            >
-              Provide liquidity to markets and earn fees from trading activity.
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <style>{`

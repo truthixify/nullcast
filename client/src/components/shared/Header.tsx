@@ -3,80 +3,40 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { LogoFull, IconSearch, IconBell } from "@/components/shared/Icons";
-
-const NAV_ITEMS = [
-  { label: "Markets", href: "/markets" },
-  { label: "Portfolio", href: "/portfolio" },
-  { label: "Create", href: "/markets/create" },
-  { label: "Reputation", href: "/reputation" },
-] as const;
+import { BrandMark, FHEBadge } from "./Icons";
 
 export function Header() {
-  const pathname = usePathname();
-
+  const path = usePathname();
+  const navItems = [
+    { href: "/markets", label: "Markets" },
+    { href: "/portfolio", label: "Portfolio" },
+    { href: "/reputation", label: "Reputation" },
+  ];
   return (
-    <header className="nc-header">
-      <div className="nc-header__inner container">
-        {/* Left: Logo + Nav */}
-        <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
-          <Link href="/" style={{ textDecoration: "none" }}>
-            <LogoFull size={24} />
-          </Link>
-
-          <nav style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-            {NAV_ITEMS.map((item) => {
-              const isActive =
-                item.href === "/markets"
-                  ? pathname === "/markets" ||
-                    (pathname.startsWith("/markets") &&
-                      pathname !== "/markets/create")
-                  : pathname === item.href;
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`nc-nav${isActive ? " nc-nav--active" : ""}`}
-                  style={{ textDecoration: "none" }}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
+    <header className="site-header">
+      <div className="container row">
+        <Link href="/" className="brand">
+          <span className="mark" style={{ color: "var(--acc)" }}>
+            <BrandMark />
+          </span>
+          <span>nullcast</span>
+        </Link>
+        <nav className="nav">
+          {navItems.map((n) => (
+            <Link
+              key={n.href}
+              href={n.href}
+              className={path?.startsWith(n.href) ? "active" : ""}
+            >
+              {n.label}
+            </Link>
+          ))}
+        </nav>
+        <div className="header-spacer" />
+        <div className="header-meta">
+          <FHEBadge>FHE &middot; Sepolia</FHEBadge>
         </div>
-
-        {/* Right: Search + Bell + Connect */}
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <div className="nc-search">
-            <IconSearch
-              size={14}
-              stroke="var(--color-text-tertiary)"
-            />
-            <input
-              type="text"
-              placeholder="Search markets..."
-              aria-label="Search markets"
-            />
-            <kbd className="nc-search__kbd">&#8984;K</kbd>
-          </div>
-
-          <button
-            type="button"
-            className="btn btn-ghost"
-            style={{ padding: "8px" }}
-            aria-label="Notifications"
-          >
-            <IconBell size={18} stroke="var(--color-text-secondary)" />
-          </button>
-
-          <ConnectButton
-            showBalance={false}
-            chainStatus="icon"
-            accountStatus="address"
-          />
-        </div>
+        <ConnectButton />
       </div>
     </header>
   );

@@ -6,14 +6,57 @@ import { useRouter } from "next/navigation";
 import { useAccount, useBlockNumber } from "wagmi";
 import { useCreateMarket } from "@/hooks/useFactory";
 import {
-  IconChevronLeft,
-  IconShield,
-  IconCheck,
-  IconExternal,
+  ChevronIcon,
+  CheckIcon,
+  ExternalIcon,
   LockIcon,
 } from "@/components/shared/Icons";
 
 const SEPOLIA_BLOCK_TIME_SECONDS = 12;
+
+/* ── TypeTile ──────────────────────────────────────────────────── */
+function TypeTile({
+  title,
+  sub,
+  active,
+  disabled,
+  onClick,
+}: {
+  title: string;
+  sub: string;
+  active: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="card inter"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        flex: 1,
+        padding: "16px",
+        textAlign: "left",
+        cursor: disabled ? "not-allowed" : "pointer",
+        background: active ? "var(--acc-bg)" : undefined,
+        borderColor: active ? "var(--acc-bd)" : undefined,
+      }}
+    >
+      <div
+        className="display"
+        style={{
+          fontSize: 16,
+          color: active ? "var(--acc)" : "var(--t-1)",
+          marginBottom: 4,
+        }}
+      >
+        {title}
+      </div>
+      <div style={{ fontSize: 12, color: "var(--t-3)" }}>{sub}</div>
+    </button>
+  );
+}
 
 export default function CreateMarketPage() {
   const router = useRouter();
@@ -62,7 +105,6 @@ export default function CreateMarketPage() {
     createMarket(question.trim(), expiryBlock, minimumBetInBaseUnits, buckets);
   };
 
-  // Redirect on success after a short delay
   if (isConfirmed) {
     setTimeout(() => router.push("/markets"), 2000);
   }
@@ -76,478 +118,265 @@ export default function CreateMarketPage() {
         : "idle";
 
   return (
-    <div className="container" style={{ paddingTop: "32px", paddingBottom: "80px" }}>
-      <div style={{ maxWidth: "720px", margin: "0 auto" }}>
-        {/* Back button */}
-        <Link
-          href="/markets"
-          className="btn btn-ghost"
-          style={{ marginBottom: "24px", display: "inline-flex" }}
-        >
-          <IconChevronLeft size={14} />
-          Back to Markets
+    <div className="page">
+      <div className="container" style={{ maxWidth: 720 }}>
+        {/* Back */}
+        <Link href="/markets" className="btn ghost sm" style={{ marginBottom: 24 }}>
+          <ChevronIcon size={12} direction="left" />
+          All markets
         </Link>
 
-        {/* Title + subtitle */}
-        <div style={{ marginBottom: "32px" }}>
-          <h1
-            className="display"
-            style={{
-              fontSize: "var(--text-2xl)",
-              fontWeight: 700,
-              letterSpacing: "-0.04em",
-              marginBottom: "8px",
-            }}
-          >
-            Create market
-          </h1>
-          <p
-            style={{
-              fontSize: "var(--text-sm)",
-              color: "var(--color-text-tertiary)",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-            }}
-          >
-            <IconShield size={13} stroke="var(--color-text-tertiary)" />
-            Requires reputation score of 40 or higher to create a market
+        {/* Page head */}
+        <div className="page-head" style={{ padding: 0, marginBottom: 32 }}>
+          <h1 style={{ fontSize: 36 }}>Create market</h1>
+          <p className="sub">
+            Deploy a new prediction market to Sepolia. Resolves via oracle.
           </p>
         </div>
 
-        {/* Not connected state */}
+        {/* Not connected */}
         {!isConnected && (
           <div
-            className="card"
+            className="card elevated"
             style={{
-              padding: "48px 32px",
+              padding: "64px 32px",
               textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 16,
             }}
           >
-            <LockIcon size={32} stroke="var(--color-text-tertiary)" />
-            <p
-              style={{
-                fontSize: "var(--text-base)",
-                fontWeight: 500,
-                color: "var(--color-text-secondary)",
-                marginTop: "16px",
-              }}
-            >
+            <LockIcon size={32} />
+            <p style={{ fontSize: 15, fontWeight: 500, color: "var(--t-2)" }}>
               Connect your wallet to create a market
             </p>
-            <p
-              style={{
-                fontSize: "var(--text-sm)",
-                color: "var(--color-text-tertiary)",
-                marginTop: "8px",
-              }}
-            >
-              You need a connected wallet and sufficient reputation to create prediction markets.
+            <p style={{ fontSize: 13, color: "var(--t-3)", maxWidth: 360 }}>
+              You need a connected wallet and sufficient reputation.
             </p>
           </div>
         )}
 
-        {/* Form (only when connected) */}
+        {/* Form */}
         {isConnected && (
           <>
-            <div className="card" style={{ padding: "32px", marginBottom: "24px" }}>
-              {/* Question input */}
-              <div style={{ marginBottom: "32px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "10px",
-                    fontFamily: "var(--font-mono)",
-                    color: "var(--color-text-tertiary)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                    marginBottom: "10px",
-                  }}
-                >
-                  Market question *
-                </label>
-                <input
-                  type="text"
-                  className="display"
-                  placeholder="Will [event] happen by [date]?"
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  disabled={txState !== "idle"}
-                  style={{
-                    width: "100%",
-                    background: "none",
-                    border: "none",
-                    borderBottom: "2px solid var(--color-border-default)",
-                    outline: "none",
-                    fontSize: "var(--text-xl)",
-                    fontWeight: 600,
-                    letterSpacing: "-0.03em",
-                    color: "var(--color-text-primary)",
-                    padding: "12px 0",
-                    transition: "border-color 200ms var(--ease-out)",
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderBottomColor = "var(--color-accent)";
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderBottomColor = "var(--color-border-default)";
-                  }}
-                />
-                <p
-                  style={{
-                    fontSize: "var(--text-xs)",
-                    color: "var(--color-text-tertiary)",
-                    marginTop: "8px",
-                  }}
-                >
-                  Write a clear, binary (yes/no) question. Ambiguous questions may be disputed.
-                </p>
-              </div>
-
-              {/* Market type + Expiry grid */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "24px",
-                  marginBottom: "24px",
-                }}
-              >
-                {/* Market type */}
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "10px",
-                      fontFamily: "var(--font-mono)",
-                      color: "var(--color-text-tertiary)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.1em",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    Market type
-                  </label>
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <button
-                      type="button"
-                      className={`chip${marketType === "binary" ? " chip--active" : ""}`}
-                      onClick={() => setMarketType("binary")}
-                      disabled={txState !== "idle"}
-                      style={{
-                        borderColor: marketType === "binary" ? "var(--color-accent)" : undefined,
-                        background: marketType === "binary" ? "var(--color-accent-muted)" : undefined,
-                        color: marketType === "binary" ? "var(--color-accent-bright)" : undefined,
-                      }}
-                    >
-                      Binary
-                    </button>
-                    <button
-                      type="button"
-                      className={`chip${marketType === "scalar" ? " chip--active" : ""}`}
-                      onClick={() => setMarketType("scalar")}
-                      disabled={txState !== "idle"}
-                      style={{
-                        borderColor: marketType === "scalar" ? "var(--color-accent)" : undefined,
-                        background: marketType === "scalar" ? "var(--color-accent-muted)" : undefined,
-                        color: marketType === "scalar" ? "var(--color-accent-bright)" : undefined,
-                      }}
-                    >
-                      Scalar
-                    </button>
-                  </div>
-                </div>
-
-                {/* Expiry date */}
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "10px",
-                      fontFamily: "var(--font-mono)",
-                      color: "var(--color-text-tertiary)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.1em",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    Expiry date
-                  </label>
-                  <input
-                    type="date"
-                    className="input"
-                    value={expiry}
-                    onChange={(e) => setExpiry(e.target.value)}
-                    disabled={txState !== "idle"}
-                    min={new Date().toISOString().split("T")[0]}
-                    style={{ colorScheme: "dark" }}
-                  />
-                  {expiryBlock && (
-                    <p
-                      className="mono"
-                      style={{
-                        fontSize: "var(--text-xs)",
-                        color: "var(--color-text-tertiary)",
-                        marginTop: "6px",
-                      }}
-                    >
-                      Approx. block #{expiryBlock.toString()}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Minimum bet + Bucket count */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: marketType === "scalar" ? "1fr 1fr" : "1fr",
-                  gap: "24px",
-                }}
-              >
-                {/* Minimum bet */}
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "10px",
-                      fontFamily: "var(--font-mono)",
-                      color: "var(--color-text-tertiary)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.1em",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    Minimum bet (cUSDT)
-                  </label>
-                  <input
-                    type="number"
-                    className="input"
-                    value={minimumBet}
-                    onChange={(e) => setMinimumBet(e.target.value)}
-                    disabled={txState !== "idle"}
-                    min="0.01"
-                    step="0.01"
-                    placeholder="1"
-                    style={{ colorScheme: "dark" }}
-                  />
-                  <p
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--color-text-tertiary)",
-                      marginTop: "6px",
-                    }}
-                  >
-                    Minimum amount per bet in cUSDT (6 decimals)
-                  </p>
-                </div>
-
-                {/* Bucket count (scalar only) */}
-                {marketType === "scalar" && (
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "10px",
-                        fontFamily: "var(--font-mono)",
-                        color: "var(--color-text-tertiary)",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.1em",
-                        marginBottom: "10px",
-                      }}
-                    >
-                      Bucket count
-                    </label>
+            <div className="card elevated" style={{ overflow: "hidden" }}>
+              <div className="card-body" style={{ padding: 24 }}>
+                <div className="stack gap-6">
+                  {/* Question */}
+                  <div className="field">
+                    <label>Market question *</label>
                     <input
-                      type="number"
-                      className="input"
-                      value={bucketCount}
-                      onChange={(e) => setBucketCount(e.target.value)}
+                      type="text"
+                      className="input lg"
+                      placeholder="Will [event] happen by [date]?"
+                      value={question}
+                      onChange={(e) => setQuestion(e.target.value)}
                       disabled={txState !== "idle"}
-                      min="2"
-                      max="10"
-                      step="1"
-                      placeholder="3"
-                      style={{ colorScheme: "dark" }}
                     />
-                    <p
-                      style={{
-                        fontSize: "var(--text-xs)",
-                        color: "var(--color-text-tertiary)",
-                        marginTop: "6px",
-                      }}
-                    >
-                      Number of outcome buckets (2-10)
+                    <span className="hint">
+                      Write a clear yes/no question. Ambiguous questions may be disputed.
+                    </span>
+                  </div>
+
+                  {/* Market type */}
+                  <div className="field">
+                    <label>Market type</label>
+                    <div className="row gap-2">
+                      <TypeTile
+                        title="Binary"
+                        sub="Yes or No outcome"
+                        active={marketType === "binary"}
+                        disabled={txState !== "idle"}
+                        onClick={() => setMarketType("binary")}
+                      />
+                      <TypeTile
+                        title="Scalar"
+                        sub="Multiple outcome buckets"
+                        active={marketType === "scalar"}
+                        disabled={txState !== "idle"}
+                        onClick={() => setMarketType("scalar")}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Scalar bucket count */}
+                  {marketType === "scalar" && (
+                    <div className="field">
+                      <label>Bucket count</label>
+                      <input
+                        type="number"
+                        className="input"
+                        value={bucketCount}
+                        onChange={(e) => setBucketCount(e.target.value)}
+                        disabled={txState !== "idle"}
+                        min="2"
+                        max="10"
+                        step="1"
+                        placeholder="3"
+                      />
+                      <span className="hint">Number of outcome buckets (2-10)</span>
+                    </div>
+                  )}
+
+                  {/* Expiry + Min bet grid */}
+                  <div className="grid-2">
+                    <div className="field">
+                      <label>Expiry date</label>
+                      <input
+                        type="date"
+                        className="input"
+                        value={expiry}
+                        onChange={(e) => setExpiry(e.target.value)}
+                        disabled={txState !== "idle"}
+                        min={new Date().toISOString().split("T")[0]}
+                        style={{ colorScheme: "dark" }}
+                      />
+                      {expiryBlock && (
+                        <span className="hint mono">
+                          Block #{expiryBlock.toString()}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="field">
+                      <label>Minimum bet</label>
+                      <div className="input-row">
+                        <input
+                          type="number"
+                          className="input"
+                          value={minimumBet}
+                          onChange={(e) => setMinimumBet(e.target.value)}
+                          disabled={txState !== "idle"}
+                          min="0.01"
+                          step="0.01"
+                          placeholder="1"
+                        />
+                        <span className="unit">cUSDT</span>
+                      </div>
+                      <span className="hint">6 decimal precision</span>
+                    </div>
+                  </div>
+
+                  {/* Info box */}
+                  <div
+                    style={{
+                      background: "var(--bg-0)",
+                      border: "1px solid var(--border-1)",
+                      borderRadius: "var(--r-md)",
+                      padding: 16,
+                    }}
+                  >
+                    <span className="eyebrow" style={{ display: "block", marginBottom: 8 }}>
+                      Before you deploy
+                    </span>
+                    <p style={{ fontSize: 12, color: "var(--t-3)", lineHeight: 1.6, margin: 0 }}>
+                      Creating a market deploys a new contract to Sepolia. You need a reputation
+                      score of 40+ and sufficient ETH for gas. The market question cannot be
+                      changed after deployment.
                     </p>
                   </div>
-                )}
-              </div>
-            </div>
 
-            {/* Error display */}
-            {error && (
-              <div
-                className="card"
-                style={{
-                  padding: "16px 20px",
-                  marginBottom: "16px",
-                  background: "rgba(255, 59, 48, 0.08)",
-                  border: "1px solid rgba(255, 59, 48, 0.2)",
-                  borderRadius: "10px",
-                }}
-              >
-                <p
-                  style={{
-                    fontSize: "var(--text-sm)",
-                    color: "var(--color-no-text)",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {error.message?.includes("User rejected")
-                    ? "Transaction rejected by user."
-                    : error.message ?? "Transaction failed. Please try again."}
-                </p>
-              </div>
-            )}
+                  <hr className="divider" />
 
-            {/* Transaction status */}
-            {txState !== "idle" && (
-              <div
-                className="card"
-                style={{
-                  padding: "20px 24px",
-                  marginBottom: "16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                }}
-              >
-                {txState === "writing" && (
-                  <>
+                  {/* Error */}
+                  {error && (
                     <div
                       style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: "50%",
-                        border: "2px solid var(--color-accent)",
-                        borderTopColor: "transparent",
-                        animation: "spin 1s linear infinite",
-                      }}
-                    />
-                    <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
-                      Confirm transaction in your wallet...
-                    </span>
-                  </>
-                )}
-                {txState === "confirming" && (
-                  <>
-                    <div
-                      style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: "50%",
-                        border: "2px solid var(--color-accent)",
-                        borderTopColor: "transparent",
-                        animation: "spin 1s linear infinite",
-                      }}
-                    />
-                    <div>
-                      <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
-                        Waiting for confirmation...
-                      </span>
-                      {hash && (
-                        <a
-                          href={`https://sepolia.etherscan.io/tx/${hash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            fontSize: "var(--text-xs)",
-                            color: "var(--color-accent-bright)",
-                            marginTop: "4px",
-                          }}
-                        >
-                          View on Etherscan
-                          <IconExternal size={11} stroke="var(--color-accent-bright)" />
-                        </a>
-                      )}
-                    </div>
-                  </>
-                )}
-                {txState === "confirmed" && (
-                  <>
-                    <div
-                      style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: "50%",
-                        background: "var(--color-yes-muted)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
+                        padding: "12px 16px",
+                        background: "var(--no-bg)",
+                        border: "1px solid var(--no-bd)",
+                        borderRadius: "var(--r-md)",
+                        fontSize: 13,
+                        color: "var(--no-hi)",
+                        wordBreak: "break-word",
                       }}
                     >
-                      <IconCheck size={12} stroke="var(--color-yes-text)" />
+                      {error.message?.includes("User rejected")
+                        ? "Transaction rejected by user."
+                        : error.message ?? "Transaction failed. Please try again."}
                     </div>
-                    <div>
-                      <span style={{ fontSize: "var(--text-sm)", color: "var(--color-yes-text)", fontWeight: 500 }}>
-                        Market created successfully!
-                      </span>
-                      {hash && (
-                        <a
-                          href={`https://sepolia.etherscan.io/tx/${hash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            fontSize: "var(--text-xs)",
-                            color: "var(--color-accent-bright)",
-                            marginTop: "4px",
-                          }}
-                        >
-                          View on Etherscan
-                          <IconExternal size={11} stroke="var(--color-accent-bright)" />
-                        </a>
-                      )}
-                      <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", marginTop: "4px" }}>
-                        Redirecting to markets...
-                      </p>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+                  )}
 
-            {/* Submit button */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "flex-end",
-              }}
-            >
-              <button
-                className="btn btn-primary btn-lg"
-                type="button"
-                onClick={handleSubmit}
-                disabled={!isFormValid || txState !== "idle"}
-                style={{
-                  opacity: !isFormValid || txState !== "idle" ? 0.5 : 1,
-                  pointerEvents: !isFormValid || txState !== "idle" ? "none" : "auto",
-                }}
-              >
-                {txState === "idle" ? "Create Market" : "Processing..."}
-              </button>
+                  {/* Tx status */}
+                  {txState !== "idle" && (
+                    <div className="row gap-2" style={{ fontSize: 13 }}>
+                      {txState === "confirmed" ? (
+                        <>
+                          <CheckIcon size={14} />
+                          <span style={{ color: "var(--yes-hi)", fontWeight: 500 }}>
+                            Market created
+                          </span>
+                          {hash && (
+                            <a
+                              href={`https://sepolia.etherscan.io/tx/${hash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="row gap-2"
+                              style={{ color: "var(--acc)", fontSize: 12 }}
+                            >
+                              Etherscan <ExternalIcon size={11} />
+                            </a>
+                          )}
+                          <span className="mono" style={{ color: "var(--t-3)", fontSize: 12 }}>
+                            Redirecting...
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span
+                            style={{
+                              width: 14,
+                              height: 14,
+                              borderRadius: "50%",
+                              border: "2px solid var(--acc)",
+                              borderTopColor: "transparent",
+                              animation: "spin 1s linear infinite",
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span style={{ color: "var(--t-2)" }}>
+                            {txState === "writing"
+                              ? "Confirm in wallet..."
+                              : "Waiting for confirmation..."}
+                          </span>
+                          {hash && (
+                            <a
+                              href={`https://sepolia.etherscan.io/tx/${hash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="row gap-2"
+                              style={{ color: "var(--acc)", fontSize: 12 }}
+                            >
+                              Etherscan <ExternalIcon size={11} />
+                            </a>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="row between">
+                    <Link href="/markets" className="btn ghost">
+                      Cancel
+                    </Link>
+                    <button
+                      className="btn primary lg"
+                      type="button"
+                      onClick={handleSubmit}
+                      disabled={!isFormValid || txState !== "idle"}
+                    >
+                      {txState === "idle" ? "Create Market" : "Processing..."}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </>
         )}
       </div>
 
-      {/* Spin animation for loading indicators */}
       <style>{`
         @keyframes spin {
           to { transform: rotate(360deg); }

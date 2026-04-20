@@ -4,17 +4,17 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useAccount, useReadContract } from "wagmi";
 import {
-  FHEBadge,
   LockIcon,
-  IconChevronLeft,
-  IconClock,
-  IconCheck,
-  IconShield,
-  IconWallet,
-  IconInfo,
-  IconExternal,
+  LockOpenIcon,
+  FHEBadge,
+  Pill,
+  RefreshIcon,
+  CopyIcon,
+  CheckIcon,
+  ExternalIcon,
 } from "@/components/shared/Icons";
 import { OddsBar } from "@/components/shared/OddsBar";
+import { EncryptedValue } from "@/components/shared/EncryptedValue";
 import { useMarket, useHasPosition } from "@/hooks/useMarket";
 import { usePlaceBet } from "@/hooks/usePlaceBet";
 import { useClaimWinnings } from "@/hooks/useClaimWinnings";
@@ -26,7 +26,7 @@ import { nullCastFactoryConfig } from "@/lib/contracts";
 import { CONTRACT_ADDRESSES } from "@/constants/addresses";
 import { useNullCastStore } from "@/lib/store";
 
-/* ── Status helpers ──────────────────────────────────────────── */
+/* ── Helpers ───────────────────────────────────────────────────── */
 
 const STATUS_LABELS: Record<number, string> = {
   0: "OPEN",
@@ -36,12 +36,12 @@ const STATUS_LABELS: Record<number, string> = {
   4: "CANCELLED",
 };
 
-const STATUS_PILL_CLASS: Record<number, string> = {
-  0: "pill-yes",
-  1: "pill-warning",
-  2: "pill-warning",
-  3: "pill-privacy",
-  4: "pill-no",
+const STATUS_PILL: Record<number, string> = {
+  0: "open",
+  1: "neutral",
+  2: "neutral",
+  3: "resolved",
+  4: "cancelled",
 };
 
 const MARKET_TYPE_LABELS: Record<number, string> = {
@@ -49,24 +49,51 @@ const MARKET_TYPE_LABELS: Record<number, string> = {
   1: "Scalar",
 };
 
-function formatCUSDT(raw: bigint | undefined): string {
-  if (raw === undefined) return "0";
+function fmtCUSDT(raw: bigint | undefined): string {
+  if (raw === undefined) return "0.00";
   return (Number(raw) / 1e6).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 }
 
-function truncateAddress(addr: string): string {
+function truncAddr(addr: string): string {
   if (addr.length <= 10) return addr;
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
-/* ── Bet flow step type ──────────────────────────────────────── */
+/* ── Copy-to-clipboard inline button ───────────────────────────── */
 
-type BetStep = "idle" | "encrypting" | "approving" | "writing" | "confirming" | "confirmed" | "error";
+function CopyBtn({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      className="btn ghost"
+      type="button"
+      style={{ padding: 0, height: "auto", minHeight: 0, marginLeft: 4 }}
+      onClick={() => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      {copied ? <CheckIcon size={10} /> : <CopyIcon size={10} />}
+    </button>
+  );
+}
 
-/* ── Main page ────────────────────────────────────────────────── */
+/* ── Bet flow step type ────────────────────────────────────────── */
+
+type BetStep =
+  | "idle"
+  | "encrypting"
+  | "approving"
+  | "writing"
+  | "confirming"
+  | "confirmed"
+  | "error";
+
+/* ── Page ──────────────────────────────────────────────────────── */
 
 export default function MarketDetailPage({
   params,
@@ -77,7 +104,7 @@ export default function MarketDetailPage({
   const marketId = parseInt(rawId, 10);
   const isValidId = !isNaN(marketId) && marketId >= 0;
 
-  /* ── Resolve market address from factory ────────────────────── */
+  /* ── Resolve market address from factory ─────────────────────── */
   const {
     data: marketAddress,
     isLoading: isAddressLoading,
@@ -94,16 +121,20 @@ export default function MarketDetailPage({
     resolvedAddress === "0x0000000000000000000000000000000000000000";
   const hasAddress = !!resolvedAddress && !isZeroAddress;
 
-  /* ── Market state (polls every 12s for live odds) ───────────── */
+  /* ── Market state (polls every 12s) ──────────────────────────── */
   const market = useMarket(
-    hasAddress ? resolvedAddress : ("0x0000000000000000000000000000000000000000" as `0x${string}`),
+    hasAddress
+      ? resolvedAddress
+      : ("0x0000000000000000000000000000000000000000" as `0x${string}`),
     { refetchInterval: hasAddress ? 12_000 : undefined }
   );
 
-  /* ── Wallet & position ──────────────────────────────────────── */
+  /* ── Wallet & position ───────────────────────────────────────── */
   const { address: userAddress, isConnected } = useAccount();
   const hasPosition = useHasPosition(
-    hasAddress ? resolvedAddress : ("0x0000000000000000000000000000000000000000" as `0x${string}`),
+    hasAddress
+      ? resolvedAddress
+      : ("0x0000000000000000000000000000000000000000" as `0x${string}`),
     userAddress
   );
 
@@ -123,8 +154,9 @@ export default function MarketDetailPage({
     query: { enabled: hasAddress && !!userAddress },
   });
 
-  /* ── Betting hooks ──────────────────────────────────────────── */
-  const zeroAddr = "0x0000000000000000000000000000000000000000" as `0x${string}`;
+  /* ── Betting hooks ───────────────────────────────────────────── */
+  const zeroAddr =
+    "0x0000000000000000000000000000000000000000" as `0x${string}`;
   const bet = usePlaceBet(hasAddress ? resolvedAddress : zeroAddr);
   const claim = useClaimWinnings(hasAddress ? resolvedAddress : zeroAddr);
   const approveCUSDT = useApproveCUSDT();
@@ -132,21 +164,22 @@ export default function MarketDetailPage({
   const oddsKeeper = useOddsKeeper(hasAddress ? resolvedAddress : zeroAddr);
   const userDecrypt = useUserDecrypt(hasAddress ? resolvedAddress : zeroAddr);
 
-  /* ── Zustand store ──────────────────────────────────────────── */
+  /* ── Zustand store ───────────────────────────────────────────── */
   const addPosition = useNullCastStore((s) => s.addPosition);
   const storedPositions = useNullCastStore((s) => s.positions);
 
-  /* ── Local UI state ─────────────────────────────────────────── */
+  /* ── Local UI state ──────────────────────────────────────────── */
   const [side, setSide] = useState<"YES" | "NO">("YES");
   const [amount, setAmount] = useState("100");
   const [betStep, setBetStep] = useState<BetStep>("idle");
 
-  /* ── Derived values ─────────────────────────────────────────── */
+  /* ── Derived values ──────────────────────────────────────────── */
   const amountNum = parseFloat(amount) || 0;
   const yesPct = market.yesOdds;
   const noPct = market.noOdds;
   const selectedPct = side === "YES" ? yesPct : noPct;
-  const multiplier = selectedPct > 0 ? (100 / selectedPct).toFixed(2) : "0.00";
+  const multiplier =
+    selectedPct > 0 ? (100 / selectedPct).toFixed(2) : "0.00";
   const payout = (amountNum * parseFloat(multiplier)).toFixed(2);
   const profit = (parseFloat(payout) - amountNum).toFixed(2);
 
@@ -168,13 +201,13 @@ export default function MarketDetailPage({
 
   const quickAmounts = [25, 50, 100, 250];
 
-  /* ── Bet handler ────────────────────────────────────────────── */
+  /* ── Bet handler ─────────────────────────────────────────────── */
   const handlePlaceBet = useCallback(async () => {
-    if (!isConnected || !hasAddress || !resolvedAddress || !isMarketOpen) return;
+    if (!isConnected || !hasAddress || !resolvedAddress || !isMarketOpen)
+      return;
     if (amountNum <= 0 || isAmountBelowMin) return;
 
     try {
-      // Step 1: Encrypt the amount using FHEVM SDK
       setBetStep("encrypting");
       const amountBaseUnits = BigInt(Math.round(amountNum * 1e6));
 
@@ -184,33 +217,53 @@ export default function MarketDetailPage({
         return;
       }
 
-      // Step 2: Approve cUSDT spending (also needs encrypted amount)
       setBetStep("approving");
-      const approveEnc = await fhe.encrypt(amountBaseUnits, CONTRACT_ADDRESSES.MockcUSDT as `0x${string}`);
+      const approveEnc = await fhe.encrypt(
+        amountBaseUnits,
+        CONTRACT_ADDRESSES.MockcUSDT as `0x${string}`
+      );
       if (!approveEnc) {
         setBetStep("error");
         return;
       }
-      approveCUSDT.approve(resolvedAddress, approveEnc.handle, approveEnc.inputProof);
+      approveCUSDT.approve(
+        resolvedAddress,
+        approveEnc.handle,
+        approveEnc.inputProof
+      );
 
-      // Step 3: Place the bet
       setBetStep("writing");
       bet.placeBet(encResult.handle, encResult.inputProof, side === "YES");
       setBetStep("confirming");
     } catch {
       setBetStep("error");
     }
-  }, [isConnected, hasAddress, resolvedAddress, isMarketOpen, amountNum, isAmountBelowMin, side, fhe, approveCUSDT, bet]);
+  }, [
+    isConnected,
+    hasAddress,
+    resolvedAddress,
+    isMarketOpen,
+    amountNum,
+    isAmountBelowMin,
+    side,
+    fhe,
+    approveCUSDT,
+    bet,
+  ]);
 
-  // Track bet confirmation from the write hook
   const isBetConfirmed = bet.isConfirmed;
   const isBetWriting = bet.isWriting;
   const isBetConfirming = bet.isConfirming;
 
-  // Track bet confirmation in useEffect to avoid render-phase setState
   const prevBetConfirmed = useRef(false);
   useEffect(() => {
-    if (isBetConfirmed && !prevBetConfirmed.current && betStep === "confirming" && hasAddress && resolvedAddress) {
+    if (
+      isBetConfirmed &&
+      !prevBetConfirmed.current &&
+      betStep === "confirming" &&
+      hasAddress &&
+      resolvedAddress
+    ) {
       prevBetConfirmed.current = true;
       addPosition({
         marketAddress: resolvedAddress,
@@ -221,40 +274,38 @@ export default function MarketDetailPage({
         txHash: bet.hash,
       });
       setBetStep("confirmed");
-
-      // Trigger odds keeper to decrypt and submit updated pool totals
       oddsKeeper.updateOdds();
-
-      // Refetch market data after a delay for the odds update tx to land
       setTimeout(() => market.refetch(), 15_000);
     }
     if (!isBetConfirmed) {
       prevBetConfirmed.current = false;
     }
-  }, [isBetConfirmed, betStep, hasAddress, resolvedAddress, side, amountNum, selectedPct, bet.hash, addPosition, oddsKeeper, market]);
+  }, [
+    isBetConfirmed,
+    betStep,
+    hasAddress,
+    resolvedAddress,
+    side,
+    amountNum,
+    selectedPct,
+    bet.hash,
+    addPosition,
+    oddsKeeper,
+    market,
+  ]);
 
-  /* ── Claim handler ──────────────────────────────────────────── */
+  /* ── Claim handler ───────────────────────────────────────────── */
   const handleClaim = useCallback(() => {
     if (!isConnected || !hasAddress) return;
     claim.claimWinnings();
   }, [isConnected, hasAddress, claim]);
 
-  /* ── Loading state ──────────────────────────────────────────── */
+  /* ── Error / loading states ──────────────────────────────────── */
   if (!isValidId) {
     return (
-      <div
-        className="container"
-        style={{
-          paddingTop: "80px",
-          textAlign: "center",
-          color: "var(--color-text-tertiary)",
-        }}
-      >
-        <p style={{ fontSize: "var(--text-lg)", marginBottom: "12px" }}>
-          Invalid market ID
-        </p>
-        <Link href="/markets" className="btn btn-secondary">
-          <IconChevronLeft size={14} />
+      <div className="container" style={{ paddingTop: 80, textAlign: "center" }}>
+        <p style={{ color: "var(--t-2)", marginBottom: 12 }}>Invalid market ID</p>
+        <Link href="/markets" className="btn secondary">
           Back to Markets
         </Link>
       </div>
@@ -263,56 +314,24 @@ export default function MarketDetailPage({
 
   if (isAddressLoading || (hasAddress && market.isLoading)) {
     return (
-      <div
-        className="container"
-        style={{
-          paddingTop: "80px",
-          textAlign: "center",
-          color: "var(--color-text-tertiary)",
-        }}
-      >
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "12px",
-            fontSize: "var(--text-md)",
-          }}
-        >
-          <span
-            className="live-dot"
-            style={{ width: "8px", height: "8px" }}
-          />
+      <div className="container" style={{ paddingTop: 80, textAlign: "center" }}>
+        <span className="mono" style={{ color: "var(--t-3)" }}>
           Loading market data from Sepolia...
-        </div>
+        </span>
       </div>
     );
   }
 
   if (addressError || !hasAddress) {
     return (
-      <div
-        className="container"
-        style={{
-          paddingTop: "80px",
-          textAlign: "center",
-          color: "var(--color-text-tertiary)",
-        }}
-      >
-        <p style={{ fontSize: "var(--text-lg)", marginBottom: "12px" }}>
+      <div className="container" style={{ paddingTop: 80, textAlign: "center" }}>
+        <p style={{ color: "var(--t-2)", marginBottom: 8 }}>
           Market #{marketId} not found
         </p>
-        <p
-          style={{
-            fontSize: "var(--text-sm)",
-            marginBottom: "20px",
-            color: "var(--color-text-tertiary)",
-          }}
-        >
+        <p className="mono" style={{ color: "var(--t-4)", marginBottom: 20, fontSize: 12 }}>
           This market may not exist on the factory contract.
         </p>
-        <Link href="/markets" className="btn btn-secondary">
-          <IconChevronLeft size={14} />
+        <Link href="/markets" className="btn secondary">
           Back to Markets
         </Link>
       </div>
@@ -321,1184 +340,812 @@ export default function MarketDetailPage({
 
   if (market.error) {
     return (
-      <div
-        className="container"
-        style={{
-          paddingTop: "80px",
-          textAlign: "center",
-          color: "var(--color-text-tertiary)",
-        }}
-      >
-        <p style={{ fontSize: "var(--text-lg)", marginBottom: "12px" }}>
-          Error loading market
-        </p>
-        <p
-          style={{
-            fontSize: "var(--text-sm)",
-            marginBottom: "20px",
-            fontFamily: "var(--font-mono)",
-          }}
-        >
+      <div className="container" style={{ paddingTop: 80, textAlign: "center" }}>
+        <p style={{ color: "var(--t-2)", marginBottom: 8 }}>Error loading market</p>
+        <p className="mono" style={{ color: "var(--t-4)", fontSize: 12 }}>
           {market.error.message}
         </p>
-        <Link href="/markets" className="btn btn-secondary">
-          <IconChevronLeft size={14} />
+        <Link href="/markets" className="btn secondary" style={{ marginTop: 20 }}>
           Back to Markets
         </Link>
       </div>
     );
   }
 
+  /* ── Resolved outcome label ──────────────────────────────────── */
+  const resolvedLabel =
+    market.resolvedOutcome === BigInt(1)
+      ? "YES"
+      : market.resolvedOutcome === BigInt(0)
+        ? "NO"
+        : market.resolvedOutcome?.toString() ?? "--";
+
+  /* ── Detail items for market details card ─────────────────────── */
+  const detailItems: {
+    label: string;
+    value: string;
+    mono?: boolean;
+    copy?: string;
+  }[] = [
+    {
+      label: "Market type",
+      value: MARKET_TYPE_LABELS[market.marketType ?? 0] ?? "Binary",
+    },
+    { label: "Fee", value: "0%" },
+    {
+      label: "Min bet",
+      value: market.minimumBet ? `${fmtCUSDT(market.minimumBet)} cUSDT` : "--",
+    },
+    {
+      label: "Oracle",
+      value: market.oracle ? truncAddr(market.oracle) : "--",
+      mono: true,
+      copy: market.oracle,
+    },
+    {
+      label: "Contract",
+      value: resolvedAddress ? truncAddr(resolvedAddress) : "--",
+      mono: true,
+      copy: resolvedAddress,
+    },
+    {
+      label: "Expiry block",
+      value: market.expiryBlock ? market.expiryBlock.toString() : "--",
+      mono: true,
+    },
+    {
+      label: "YES pool",
+      value: `${market.yesPool.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} cUSDT`,
+    },
+    {
+      label: "NO pool",
+      value: `${market.noPool.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} cUSDT`,
+    },
+    {
+      label: "Rep required",
+      value: "None",
+    },
+  ];
+
+  /* ── Placeholder activity rows ───────────────────────────────── */
+  const placeholderActivity = [
+    { side: "YES", bettor: "0x1a2b...9c0d", block: "--", time: "--" },
+    { side: "NO", bettor: "0x3e4f...a1b2", block: "--", time: "--" },
+    { side: "YES", bettor: "0x5c6d...e3f4", block: "--", time: "--" },
+  ];
+
+  /* ── Render ──────────────────────────────────────────────────── */
   return (
-    <div
-      className="container"
-      style={{ paddingTop: "32px", paddingBottom: "80px" }}
-    >
-      <div className="detail-grid">
-        {/* ── Left column ─────────────────────────────────────── */}
-        <div>
-          {/* Back button */}
-          <Link
-            href="/markets"
-            className="btn btn-ghost"
-            style={{ marginBottom: "20px", display: "inline-flex" }}
-          >
-            <IconChevronLeft size={14} />
-            Back to Markets
-          </Link>
-
+    <div className="container" style={{ paddingTop: 28, paddingBottom: 80 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0,1fr) 380px",
+          gap: 28,
+          alignItems: "start",
+        }}
+      >
+        {/* ================================================================
+            LEFT COLUMN
+            ================================================================ */}
+        <div className="stack gap-4">
           {/* Pills row */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              flexWrap: "wrap",
-              marginBottom: "16px",
-            }}
-          >
-            {/* Market type pill */}
-            <span className="pill">
+          <div className="row gap-2" style={{ flexWrap: "wrap" }}>
+            <Pill variant="cat">
               {MARKET_TYPE_LABELS[market.marketType ?? 0] ?? "Binary"}
-            </span>
-
-            {/* Status badge */}
+            </Pill>
             {market.status !== undefined && (
-              <span
-                className={`pill ${STATUS_PILL_CLASS[market.status] ?? ""}`}
-              >
+              <Pill variant={STATUS_PILL[market.status] ?? ""}>
                 {STATUS_LABELS[market.status] ?? "UNKNOWN"}
-              </span>
+              </Pill>
             )}
-
             <FHEBadge />
-
-            {/* Expiry block */}
             {market.expiryBlock && (
-              <span
-                className="pill"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                }}
-              >
-                <IconClock size={11} />
-                Block {market.expiryBlock.toString()}
-              </span>
+              <Pill>Block {market.expiryBlock.toString()}</Pill>
             )}
-
-            <span
-              className="mono"
-              style={{
-                fontSize: "var(--text-xs)",
-                color: "var(--color-text-tertiary)",
-              }}
-            >
-              ID: {marketId}
-            </span>
+            <Pill className="mono">#{marketId}</Pill>
           </div>
 
           {/* Question */}
           <h1
             className="display"
             style={{
-              fontSize: "var(--text-xl)",
-              fontWeight: 700,
+              fontSize: 42,
               letterSpacing: "-0.03em",
-              marginBottom: "28px",
-              lineHeight: "var(--leading-snug)",
+              lineHeight: 1.1,
             }}
           >
             {market.question ?? "Loading..."}
           </h1>
 
-          {/* OddsBar card */}
-          <div
-            className="card card-elevated"
-            style={{ marginBottom: "28px", padding: "20px 24px" }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "14px",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "var(--text-sm)",
-                  fontWeight: 600,
-                  color: "var(--color-text-secondary)",
+          {/* ── Odds card ──────────────────────────────────────── */}
+          <div className="card elevated">
+            <div className="row between" style={{ marginBottom: 14 }}>
+              <span className="eyebrow">Aggregate odds</span>
+              <button
+                className="btn ghost"
+                type="button"
+                onClick={() => {
+                  oddsKeeper.updateOdds();
+                  setTimeout(() => market.refetch(), 15_000);
                 }}
+                disabled={oddsKeeper.isUpdating}
+                style={{ gap: 4, fontSize: 12 }}
               >
-                Current Odds
-              </span>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    fontSize: "var(--text-xs)",
-                    color: "var(--color-accent-bright)",
-                    fontFamily: "var(--font-mono)",
-                  }}
-                >
-                  <span className="live-dot" />
-                  Polling every 12s
-                </span>
-                <button
-                  className="btn btn-sm btn-secondary"
-                  onClick={() => {
-                    oddsKeeper.updateOdds();
-                    setTimeout(() => market.refetch(), 15_000);
-                  }}
-                  disabled={oddsKeeper.isUpdating}
-                  type="button"
-                  style={{ fontSize: "11px", padding: "4px 10px" }}
-                >
-                  {oddsKeeper.isUpdating ? "Decrypting..." : "Refresh odds"}
-                </button>
-              </div>
+                <RefreshIcon size={11} />
+                {oddsKeeper.isUpdating ? "Decrypting..." : "Refresh odds"}
+              </button>
             </div>
-            <OddsBar
-              yes={yesPct}
-              no={noPct}
-              large
-              pool={market.totalPool}
-              lastUpdate="Live from chain"
-            />
+            <OddsBar yes={yesPct} no={noPct} size="lg" />
+            <div
+              className="row between"
+              style={{ marginTop: 10, fontSize: 11, color: "var(--t-3)" }}
+            >
+              <span className="mono">
+                Pool: {market.totalPool.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} cUSDT
+              </span>
+              <span className="row gap-2" style={{ gap: 6 }}>
+                <span
+                  className="dot-live"
+                  style={{ width: 6, height: 6, display: "inline-block" }}
+                />
+                <span className="mono">Live</span>
+              </span>
+            </div>
           </div>
 
-          {/* Market details card */}
-          <div className="card" style={{ marginBottom: "28px" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                marginBottom: "16px",
-              }}
-            >
-              <IconShield size={16} stroke="var(--color-text-secondary)" />
-              <span
-                style={{
-                  fontSize: "var(--text-sm)",
-                  fontWeight: 600,
-                  color: "var(--color-text-secondary)",
-                }}
-              >
-                Market Details
+          {/* ── Market details card ────────────────────────────── */}
+          <div className="card">
+            <div className="card-head">
+              <span>Market details</span>
+              <span className="mono" style={{ fontSize: 11, color: "var(--t-3)" }}>
+                Sepolia
               </span>
             </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr",
-                gap: "16px",
-              }}
-            >
-              {[
-                {
-                  label: "Oracle",
-                  value: market.oracle
-                    ? truncateAddress(market.oracle)
-                    : "--",
-                  mono: true,
-                },
-                {
-                  label: "Contract",
-                  value: resolvedAddress
-                    ? truncateAddress(resolvedAddress)
-                    : "--",
-                  mono: true,
-                },
-                {
-                  label: "Market type",
-                  value:
-                    MARKET_TYPE_LABELS[market.marketType ?? 0] ?? "Binary",
-                },
-                {
-                  label: "Minimum bet",
-                  value: market.minimumBet
-                    ? `${formatCUSDT(market.minimumBet)} cUSDT`
-                    : "--",
-                },
-                {
-                  label: "Yes pool",
-                  value: `${market.yesPool.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })} cUSDT`,
-                },
-                {
-                  label: "No pool",
-                  value: `${market.noPool.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })} cUSDT`,
-                },
-                {
-                  label: "Expiry block",
-                  value: market.expiryBlock
-                    ? market.expiryBlock.toString()
-                    : "--",
-                  mono: true,
-                },
-                {
-                  label: "Status",
-                  value: STATUS_LABELS[market.status ?? 0] ?? "UNKNOWN",
-                },
-                ...(market.marketType === 1
-                  ? [
-                      {
-                        label: "Buckets",
-                        value: market.bucketCount?.toString() ?? "--",
-                      },
-                    ]
-                  : []),
-                ...(isMarketResolved
-                  ? [
-                      {
-                        label: "Resolved outcome",
-                        value:
-                          market.resolvedOutcome !== undefined
-                            ? market.resolvedOutcome === BigInt(1)
-                              ? "YES"
-                              : market.resolvedOutcome === BigInt(0)
-                                ? "NO"
-                                : market.resolvedOutcome.toString()
-                            : "--",
-                      },
-                    ]
-                  : []),
-              ].map((item) => (
-                <div key={item.label}>
-                  <div
-                    style={{
-                      fontSize: "10px",
-                      fontFamily: "var(--font-mono)",
-                      color: "var(--color-text-tertiary)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.08em",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    {item.label}
+            <div className="card-body">
+              <div className="grid-3">
+                {detailItems.map((item) => (
+                  <div key={item.label}>
+                    <div className="eyebrow">{item.label}</div>
+                    <div
+                      className={item.mono ? "mono" : ""}
+                      style={{
+                        fontSize: 13,
+                        color: "var(--t-1)",
+                        display: "flex",
+                        alignItems: "center",
+                      }}
+                    >
+                      {item.value}
+                      {item.copy && <CopyBtn text={item.copy} />}
+                    </div>
                   </div>
-                  <div
-                    className={item.mono ? "mono" : ""}
-                    style={{
-                      fontSize: "var(--text-sm)",
-                      color: "var(--color-text-primary)",
-                    }}
-                  >
-                    {item.value}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Etherscan link */}
-            {resolvedAddress && (
-              <div style={{ marginTop: "16px" }}>
+                ))}
+              </div>
+              {resolvedAddress && (
                 <a
                   href={`https://sepolia.etherscan.io/address/${resolvedAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="btn btn-sm btn-ghost"
+                  className="btn ghost"
                   style={{
-                    fontSize: "var(--text-xs)",
+                    marginTop: 16,
+                    fontSize: 11,
+                    gap: 4,
                     display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
                   }}
                 >
-                  <IconExternal size={12} />
+                  <ExternalIcon size={10} />
                   View on Etherscan
                 </a>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
-          {/* Activity placeholder */}
-          <div className="card" style={{ padding: "20px" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                marginBottom: "16px",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "var(--text-sm)",
-                  fontWeight: 600,
-                  color: "var(--color-text-secondary)",
-                }}
-              >
-                Recent Activity
-              </span>
+          {/* ── Activity table ─────────────────────────────────── */}
+          <div className="card">
+            <div className="card-head">
+              <span>Recent activity</span>
+              <Pill variant="enc">Amounts encrypted</Pill>
             </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                padding: "24px 16px",
-                background: "var(--color-bg-input)",
-                borderRadius: "var(--radius-md)",
-                color: "var(--color-text-tertiary)",
-                fontSize: "var(--text-sm)",
-              }}
-            >
-              <IconInfo size={16} stroke="var(--color-text-tertiary)" />
-              <div>
-                <p style={{ marginBottom: "4px" }}>
-                  Activity data loads from on-chain BetPlaced events.
-                </p>
-                <p
-                  className="mono"
-                  style={{
-                    fontSize: "var(--text-xs)",
-                    color: "var(--color-text-tertiary)",
-                  }}
-                >
-                  Event indexing requires a subgraph or dedicated indexer.
-                  Individual bet amounts are FHE-encrypted and shown as
-                  &bull;&bull;&bull;&bull;&bull;
-                </p>
-              </div>
+            <div className="card-body" style={{ padding: 0 }}>
+              <table className="table" style={{ width: "100%" }}>
+                <thead>
+                  <tr>
+                    <th>Side</th>
+                    <th>Bettor</th>
+                    <th>Amount</th>
+                    <th>Block</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {placeholderActivity.map((row, i) => (
+                    <tr key={i}>
+                      <td>
+                        <span className={`pill ${row.side === "YES" ? "yes" : "no"}`}>
+                          {row.side}
+                        </span>
+                      </td>
+                      <td className="mono">{row.bettor}</td>
+                      <td>
+                        <EncryptedValue state="hidden" compact />
+                      </td>
+                      <td className="mono">{row.block}</td>
+                      <td style={{ color: "var(--t-4)" }}>{row.time}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
 
-        {/* ── Right column (sticky betting panel) ─────────────── */}
-        <div style={{ position: "sticky", top: "80px", alignSelf: "start" }}>
-          <div className="card" style={{ padding: "24px" }}>
-            {/* Header */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "20px",
-              }}
-            >
-              <span
-                className="display"
-                style={{ fontSize: "var(--text-md)", fontWeight: 700 }}
-              >
-                {isMarketResolved
-                  ? "Market resolved"
-                  : isMarketCancelled
-                    ? "Market cancelled"
-                    : "Place bet"}
-              </span>
-              <FHEBadge />
-            </div>
-
-            {/* ── Not connected state ─────────────────────────── */}
-            {!isConnected && (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "12px",
-                  padding: "32px 16px",
-                  textAlign: "center",
-                }}
-              >
-                <IconWallet
-                  size={32}
-                  stroke="var(--color-text-tertiary)"
-                />
-                <p
-                  style={{
-                    fontSize: "var(--text-sm)",
-                    color: "var(--color-text-tertiary)",
-                  }}
-                >
-                  Connect your wallet to place bets on this market.
-                </p>
+        {/* ================================================================
+            RIGHT COLUMN
+            ================================================================ */}
+        <div style={{ position: "sticky", top: 80 }}>
+          {/* ── Resolved outcome card (shown instead of betting panel) ── */}
+          {isMarketResolved && (
+            <div className="card elevated" style={{ marginBottom: 16 }}>
+              <div className="card-head">
+                <span>Resolved</span>
+                <FHEBadge />
               </div>
-            )}
-
-            {/* ── Resolved state: show outcome + claim ────────── */}
-            {isConnected && isMarketResolved && (
-              <div>
+              <div className="card-body" style={{ textAlign: "center" }}>
+                <div className="eyebrow" style={{ marginBottom: 6 }}>
+                  Outcome
+                </div>
                 <div
+                  className="display"
                   style={{
-                    background: "var(--color-bg-input)",
-                    borderRadius: "var(--radius-md)",
-                    padding: "20px",
-                    textAlign: "center",
-                    marginBottom: "20px",
+                    fontSize: 32,
+                    color:
+                      resolvedLabel === "YES"
+                        ? "var(--yes)"
+                        : resolvedLabel === "NO"
+                          ? "var(--no)"
+                          : "var(--t-1)",
                   }}
                 >
-                  <div
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      fontFamily: "var(--font-mono)",
-                      color: "var(--color-text-tertiary)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.08em",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    Resolved Outcome
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "var(--text-xl)",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {market.resolvedOutcome === BigInt(1)
-                      ? "YES"
-                      : market.resolvedOutcome === BigInt(0)
-                        ? "NO"
-                        : market.resolvedOutcome?.toString() ?? "--"}
-                  </div>
+                  {resolvedLabel}
                 </div>
 
-                {hasPosition && !hasClaimed && (
+                {isConnected && hasPosition && !hasClaimed && (
                   <button
-                    className="btn btn-lg btn-yes"
+                    className="btn lg block yes"
                     onClick={handleClaim}
                     disabled={claim.isWriting || claim.isConfirming}
                     type="button"
-                    style={{ width: "100%", marginBottom: "12px" }}
+                    style={{ marginTop: 20 }}
                   >
                     {claim.isWriting
                       ? "Submitting..."
                       : claim.isConfirming
                         ? "Confirming..."
                         : claim.isConfirmed
-                          ? "Claimed!"
+                          ? "Claimed"
                           : "Claim Winnings"}
                   </button>
                 )}
 
-                {hasClaimed && (
+                {isConnected && hasClaimed && (
                   <div
+                    className="row"
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
                       justifyContent: "center",
-                      padding: "12px",
-                      fontSize: "var(--text-sm)",
-                      color: "var(--color-yes-text)",
+                      marginTop: 16,
+                      gap: 6,
+                      color: "var(--yes)",
+                      fontSize: 13,
                     }}
                   >
-                    <IconCheck size={14} stroke="var(--color-yes-text)" />
-                    Winnings already claimed
+                    <CheckIcon size={12} /> Winnings claimed
                   </div>
                 )}
 
-                {!hasPosition && (
+                {isConnected && !hasPosition && (
                   <p
                     style={{
-                      textAlign: "center",
-                      fontSize: "var(--text-sm)",
-                      color: "var(--color-text-tertiary)",
-                      padding: "12px",
+                      marginTop: 16,
+                      fontSize: 12,
+                      color: "var(--t-4)",
                     }}
                   >
-                    You have no position in this market.
+                    No position in this market.
                   </p>
                 )}
 
                 {claim.error && (
                   <p
+                    className="mono"
                     style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--color-no-text)",
-                      marginTop: "8px",
-                      fontFamily: "var(--font-mono)",
+                      marginTop: 12,
+                      fontSize: 11,
+                      color: "var(--no)",
                       wordBreak: "break-all",
                     }}
                   >
-                    Error: {claim.error.message}
+                    {claim.error.message}
                   </p>
                 )}
               </div>
-            )}
+            </div>
+          )}
 
-            {/* ── Cancelled state ─────────────────────────────── */}
-            {isConnected && isMarketCancelled && (
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "24px 16px",
-                  color: "var(--color-text-tertiary)",
-                  fontSize: "var(--text-sm)",
-                }}
-              >
-                This market has been cancelled. No bets can be placed.
+          {/* ── Betting panel (only when not resolved) ─────────── */}
+          {!isMarketResolved && (
+            <div className="card elevated">
+              <div className="card-head">
+                <span>
+                  {isMarketCancelled ? "Market cancelled" : "Place bet"}
+                </span>
+                <FHEBadge />
               </div>
-            )}
-
-            {/* ── Betting UI (only when OPEN and connected) ───── */}
-            {isConnected && isMarketOpen && (
-              <>
-                {/* YES / NO side buttons */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "10px",
-                    marginBottom: "20px",
-                  }}
-                >
-                  <button
-                    className={`side-btn${side === "YES" ? " side-btn--yes-active" : ""}`}
-                    onClick={() => setSide("YES")}
-                    type="button"
-                  >
-                    <div
-                      style={{
-                        fontSize: "var(--text-base)",
-                        fontWeight: 700,
-                        color:
-                          side === "YES"
-                            ? "var(--color-yes-text)"
-                            : "var(--color-text-primary)",
-                      }}
-                    >
-                      YES
-                    </div>
-                    <div
-                      className="mono"
-                      style={{
-                        fontSize: "var(--text-xs)",
-                        color: "var(--color-text-tertiary)",
-                      }}
-                    >
-                      {yesPct}% &middot;{" "}
-                      {yesPct > 0 ? (100 / yesPct).toFixed(1) : "0.0"}x
-                    </div>
-                  </button>
-                  <button
-                    className={`side-btn${side === "NO" ? " side-btn--no-active" : ""}`}
-                    onClick={() => setSide("NO")}
-                    type="button"
-                  >
-                    <div
-                      style={{
-                        fontSize: "var(--text-base)",
-                        fontWeight: 700,
-                        color:
-                          side === "NO"
-                            ? "var(--color-no-text)"
-                            : "var(--color-text-primary)",
-                      }}
-                    >
-                      NO
-                    </div>
-                    <div
-                      className="mono"
-                      style={{
-                        fontSize: "var(--text-xs)",
-                        color: "var(--color-text-tertiary)",
-                      }}
-                    >
-                      {noPct}% &middot;{" "}
-                      {noPct > 0 ? (100 / noPct).toFixed(1) : "0.0"}x
-                    </div>
-                  </button>
-                </div>
-
-                {/* Amount input */}
-                <div style={{ marginBottom: "12px" }}>
-                  <label
+              <div className="card-body">
+                {/* Not connected */}
+                {!isConnected && (
+                  <p
                     style={{
-                      display: "block",
-                      fontSize: "var(--text-xs)",
-                      fontFamily: "var(--font-mono)",
-                      color: "var(--color-text-tertiary)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.08em",
-                      marginBottom: "6px",
+                      textAlign: "center",
+                      padding: "32px 0",
+                      color: "var(--t-4)",
+                      fontSize: 13,
                     }}
                   >
-                    Amount
-                    {minimumBetCUSDT > 0 && (
-                      <span style={{ textTransform: "none", marginLeft: "8px" }}>
-                        (min: {minimumBetCUSDT} cUSDT)
-                      </span>
-                    )}
-                  </label>
-                  <div style={{ position: "relative" }}>
-                    <input
-                      className="input input-mono"
-                      type="text"
-                      value={amount}
-                      onChange={(e) => {
-                        setAmount(e.target.value);
-                        if (betStep !== "idle") setBetStep("idle");
-                      }}
-                      style={{
-                        paddingRight: "60px",
-                        ...(isAmountBelowMin
-                          ? {
-                              borderColor: "var(--color-no-text)",
-                            }
-                          : {}),
-                      }}
-                    />
-                    <span
-                      className="mono"
-                      style={{
-                        position: "absolute",
-                        right: "14px",
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        fontSize: "var(--text-xs)",
-                        color: "var(--color-text-tertiary)",
-                      }}
-                    >
-                      cUSDT
-                    </span>
-                  </div>
-                  {isAmountBelowMin && (
-                    <p
-                      style={{
-                        fontSize: "var(--text-xs)",
-                        color: "var(--color-no-text)",
-                        marginTop: "4px",
-                      }}
-                    >
-                      Minimum bet is {minimumBetCUSDT} cUSDT
-                    </p>
-                  )}
-                </div>
+                    Connect wallet to place bets.
+                  </p>
+                )}
 
-                {/* Quick amount chips */}
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "6px",
-                    marginBottom: "20px",
-                  }}
-                >
-                  {quickAmounts.map((qa) => (
-                    <button
-                      key={qa}
-                      className={`chip${amount === String(qa) ? " chip--active" : ""}`}
-                      onClick={() => {
-                        setAmount(String(qa));
-                        if (betStep !== "idle") setBetStep("idle");
-                      }}
-                      type="button"
+                {/* Cancelled */}
+                {isConnected && isMarketCancelled && (
+                  <p
+                    style={{
+                      textAlign: "center",
+                      padding: "24px 0",
+                      color: "var(--t-4)",
+                      fontSize: 13,
+                    }}
+                  >
+                    This market has been cancelled.
+                  </p>
+                )}
+
+                {/* Expired / Resolving */}
+                {isConnected &&
+                  !isMarketOpen &&
+                  !isMarketCancelled && (
+                    <div
                       style={{
-                        flex: 1,
                         textAlign: "center",
-                        fontSize: "12px",
+                        padding: "24px 0",
+                        color: "var(--t-4)",
+                        fontSize: 13,
                       }}
                     >
-                      {qa}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Payout breakdown */}
-                <div
-                  style={{
-                    background: "var(--color-bg-input)",
-                    borderRadius: "var(--radius-md)",
-                    padding: "16px",
-                    marginBottom: "20px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "var(--text-sm)",
-                        color: "var(--color-text-tertiary)",
-                      }}
-                    >
-                      Stake
-                    </span>
-                    <span
-                      className="mono"
-                      style={{ fontSize: "var(--text-sm)" }}
-                    >
-                      {amountNum.toLocaleString()} cUSDT
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: "12px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "var(--text-sm)",
-                        color: "var(--color-text-tertiary)",
-                      }}
-                    >
-                      Odds multiplier
-                    </span>
-                    <span
-                      className="mono"
-                      style={{ fontSize: "var(--text-sm)" }}
-                    >
-                      {multiplier}x
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      height: "1px",
-                      background: "var(--color-border-subtle)",
-                      marginBottom: "12px",
-                    }}
-                  />
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: "6px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "var(--text-sm)",
-                        fontWeight: 600,
-                        color: "var(--color-text-secondary)",
-                      }}
-                    >
-                      Payout if correct
-                    </span>
-                    <span
-                      className="mono"
-                      style={{
-                        fontSize: "var(--text-sm)",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {parseFloat(payout).toLocaleString()} cUSDT
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "var(--text-sm)",
-                        color: "var(--color-text-tertiary)",
-                      }}
-                    >
-                      Profit
-                    </span>
-                    <span
-                      className="mono"
-                      style={{
-                        fontSize: "var(--text-sm)",
-                        color:
-                          side === "YES"
-                            ? "var(--color-yes-text)"
-                            : "var(--color-no-text)",
-                        fontWeight: 600,
-                      }}
-                    >
-                      +{parseFloat(profit).toLocaleString()} cUSDT
-                    </span>
-                  </div>
-                </div>
-
-                {/* Submit button */}
-                <button
-                  className={`btn btn-lg ${side === "YES" ? "btn-yes" : "btn-no"}`}
-                  onClick={handlePlaceBet}
-                  disabled={
-                    betStep !== "idle" ||
-                    amountNum <= 0 ||
-                    isAmountBelowMin ||
-                    isBetWriting ||
-                    isBetConfirming
-                  }
-                  type="button"
-                  style={{
-                    width: "100%",
-                    marginBottom: "16px",
-                    fontSize: "14px",
-                  }}
-                >
-                  {betStep === "encrypting" ? (
-                    <>
-                      <LockIcon
-                        size={14}
-                        stroke="var(--color-text-tertiary)"
-                      />
-                      Encrypting via FHE...
-                    </>
-                  ) : betStep === "approving" ? (
-                    "Approving cUSDT..."
-                  ) : betStep === "writing" || isBetWriting ? (
-                    "Confirm in wallet..."
-                  ) : isBetConfirming ? (
-                    "Confirming on-chain..."
-                  ) : (
-                    <>
-                      <LockIcon
-                        size={14}
-                        stroke={
-                          side === "YES"
-                            ? "var(--color-yes-text)"
-                            : "var(--color-no-text)"
-                        }
-                      />
-                      Encrypt & Bet {side} &middot; {amountNum}
-                    </>
-                  )}
-                </button>
-
-                {/* Bet step feedback */}
-                {betStep === "error" && (
-                  <div
-                    style={{
-                      background: "var(--color-no-muted)",
-                      borderRadius: "var(--radius-md)",
-                      padding: "12px 14px",
-                      marginBottom: "16px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "10px",
-                    }}
-                  >
-                    <IconInfo size={14} stroke="var(--color-no-text)" />
-                    <div>
-                      <p style={{ fontSize: "var(--text-sm)", color: "var(--color-no-text)", fontWeight: 500 }}>
-                        {fhe.error || bet.error?.message || "Something went wrong"}
+                      <p>
+                        Market is{" "}
+                        <strong style={{ color: "var(--t-2)" }}>
+                          {STATUS_LABELS[market.status ?? 0]?.toLowerCase()}
+                        </strong>
+                        . Betting closed.
                       </p>
+                    </div>
+                  )}
+
+                {/* ── Active betting UI ────────────────────────── */}
+                {isConnected && isMarketOpen && (
+                  <>
+                    {/* Side selector */}
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: 8,
+                        marginBottom: 20,
+                      }}
+                    >
                       <button
-                        className="btn btn-sm btn-ghost"
-                        onClick={() => { setBetStep("idle"); fhe.reset(); }}
+                        className={`card inter${side === "YES" ? " active" : ""}`}
                         type="button"
-                        style={{ marginTop: "6px", fontSize: "var(--text-xs)" }}
-                      >
-                        Try again
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {betStep === "confirmed" && (
-                  <div
-                    style={{
-                      background: "var(--color-yes-muted)",
-                      borderRadius: "var(--radius-md)",
-                      padding: "12px 14px",
-                      marginBottom: "16px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        fontSize: "var(--text-sm)",
-                        color: "var(--color-yes-text)",
-                        fontWeight: 600,
-                        marginBottom: "4px",
-                      }}
-                    >
-                      <IconCheck
-                        size={14}
-                        stroke="var(--color-yes-text)"
-                      />
-                      Bet placed successfully
-                    </div>
-                    <p
-                      style={{
-                        fontSize: "var(--text-xs)",
-                        color: "var(--color-text-tertiary)",
-                        lineHeight: "var(--leading-normal)",
-                      }}
-                    >
-                      Your {side} position of {amountNum} cUSDT has been
-                      encrypted and recorded on-chain.
-                    </p>
-                  </div>
-                )}
-
-                {bet.error && (
-                  <div
-                    style={{
-                      background: "var(--color-no-muted)",
-                      borderRadius: "var(--radius-md)",
-                      padding: "12px 14px",
-                      marginBottom: "16px",
-                    }}
-                  >
-                    <p
-                      style={{
-                        fontSize: "var(--text-xs)",
-                        color: "var(--color-no-text)",
-                        fontFamily: "var(--font-mono)",
-                        wordBreak: "break-all",
-                      }}
-                    >
-                      Error: {bet.error.message}
-                    </p>
-                  </div>
-                )}
-
-                {/* Privacy notice */}
-                <div
-                  style={{
-                    background: "var(--color-privacy-muted)",
-                    borderRadius: "var(--radius-md)",
-                    padding: "12px 14px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: "8px",
-                    }}
-                  >
-                    <LockIcon
-                      size={13}
-                      stroke="var(--color-privacy-text)"
-                      style={{ marginTop: "2px", flexShrink: 0 }}
-                    />
-                    <p
-                      style={{
-                        fontSize: "var(--text-xs)",
-                        color: "var(--color-privacy-text)",
-                        lineHeight: "var(--leading-normal)",
-                      }}
-                    >
-                      Your bet is encrypted before it hits the chain. Nobody
-                      can see your position, not even the protocol. Only
-                      aggregate odds are public.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Position section */}
-                {(hasPosition || localPositions.length > 0) && (
-                  <div
-                    style={{
-                      marginTop: "20px",
-                      borderTop: "1px solid var(--color-border-subtle)",
-                      paddingTop: "20px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        marginBottom: "14px",
-                      }}
-                    >
-                      <span
+                        onClick={() => setSide("YES")}
                         style={{
-                          fontSize: "var(--text-sm)",
-                          fontWeight: 600,
-                          color: "var(--color-text-secondary)",
+                          cursor: "pointer",
+                          textAlign: "center",
+                          padding: "14px 8px",
+                          border:
+                            side === "YES"
+                              ? "1px solid var(--yes)"
+                              : undefined,
+                          background:
+                            side === "YES"
+                              ? "var(--yes-hi)"
+                              : undefined,
                         }}
                       >
-                        Your on-chain position
-                      </span>
-                      <LockIcon size={12} stroke="var(--color-privacy-text)" />
-                    </div>
-
-                    {/* On-chain decrypted position */}
-                    {userDecrypt.isDecrypted ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                        {userDecrypt.yesAmount !== null && userDecrypt.yesAmount > BigInt(0) && (
-                          <div style={{
-                            padding: "12px 14px",
-                            background: "var(--color-yes-muted)",
-                            borderRadius: "var(--radius-sm)",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            border: "1px solid rgba(74, 222, 128, 0.15)",
-                          }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <span className="pill pill-yes" style={{ fontWeight: 600 }}>YES</span>
-                              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>
-                                Total position
-                              </span>
-                            </div>
-                            <span className="mono encrypted-revealed" style={{ fontSize: "var(--text-md)", fontWeight: 500 }}>
-                              {(Number(userDecrypt.yesAmount) / 1e6).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", marginLeft: "4px" }}>cUSDT</span>
-                            </span>
-                          </div>
-                        )}
-                        {userDecrypt.noAmount !== null && userDecrypt.noAmount > BigInt(0) && (
-                          <div style={{
-                            padding: "12px 14px",
-                            background: "var(--color-no-muted)",
-                            borderRadius: "var(--radius-sm)",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            border: "1px solid rgba(248, 113, 113, 0.15)",
-                          }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <span className="pill pill-no" style={{ fontWeight: 600 }}>NO</span>
-                              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>
-                                Total position
-                              </span>
-                            </div>
-                            <span className="mono encrypted-revealed" style={{ fontSize: "var(--text-md)", fontWeight: 500 }}>
-                              {(Number(userDecrypt.noAmount) / 1e6).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", marginLeft: "4px" }}>cUSDT</span>
-                            </span>
-                          </div>
-                        )}
-                        <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", marginTop: "4px" }}>
-                          Decrypted from on-chain via Zama KMS. Only you can see this.
-                        </p>
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                         <div
+                          className="display"
                           style={{
-                            padding: "14px",
-                            background: "var(--color-privacy-muted)",
-                            borderRadius: "var(--radius-sm)",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "10px",
+                            fontSize: 22,
+                            color:
+                              side === "YES"
+                                ? "var(--yes)"
+                                : "var(--t-1)",
                           }}
                         >
-                          <LockIcon size={14} stroke="var(--color-privacy-text)" />
-                          <div>
-                            <p style={{ fontSize: "var(--text-sm)", color: "var(--color-privacy-text)", fontWeight: 500, marginBottom: "2px" }}>
-                              {userDecrypt.hasYesPosition && "YES"}{userDecrypt.hasYesPosition && userDecrypt.hasNoPosition && " + "}{userDecrypt.hasNoPosition && "NO"} position encrypted on-chain
-                            </p>
-                            <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>
-                              Sign a message to decrypt your position amount via the Zama KMS.
-                            </p>
-                          </div>
+                          YES
                         </div>
-                        <button
-                          className="btn btn-secondary"
-                          onClick={userDecrypt.decrypt}
-                          disabled={userDecrypt.isDecrypting}
-                          type="button"
-                          style={{ width: "100%" }}
+                        <div className="mono" style={{ fontSize: 11, color: "var(--t-3)", marginTop: 2 }}>
+                          {yesPct}% &middot; {yesPct > 0 ? (100 / yesPct).toFixed(1) : "0.0"}x
+                        </div>
+                      </button>
+                      <button
+                        className={`card inter${side === "NO" ? " active" : ""}`}
+                        type="button"
+                        onClick={() => setSide("NO")}
+                        style={{
+                          cursor: "pointer",
+                          textAlign: "center",
+                          padding: "14px 8px",
+                          border:
+                            side === "NO"
+                              ? "1px solid var(--no)"
+                              : undefined,
+                          background:
+                            side === "NO"
+                              ? "var(--no-hi)"
+                              : undefined,
+                        }}
+                      >
+                        <div
+                          className="display"
+                          style={{
+                            fontSize: 22,
+                            color:
+                              side === "NO"
+                                ? "var(--no)"
+                                : "var(--t-1)",
+                          }}
                         >
-                          <IconShield size={14} />
-                          {userDecrypt.isDecrypting ? "Decrypting via KMS..." : "Decrypt my position"}
-                        </button>
-                        {userDecrypt.error && (
-                          <p style={{ fontSize: "var(--text-xs)", color: "var(--color-no-text)" }}>
-                            {userDecrypt.error}
-                          </p>
+                          NO
+                        </div>
+                        <div className="mono" style={{ fontSize: 11, color: "var(--t-3)", marginTop: 2 }}>
+                          {noPct}% &middot; {noPct > 0 ? (100 / noPct).toFixed(1) : "0.0"}x
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* Amount field */}
+                    <div className="field" style={{ marginBottom: 10 }}>
+                      <label className="eyebrow">
+                        Amount
+                        {minimumBetCUSDT > 0 && (
+                          <span style={{ textTransform: "none", marginLeft: 6, fontWeight: 400 }}>
+                            (min {minimumBetCUSDT})
+                          </span>
                         )}
+                      </label>
+                      <div className="input-row">
+                        <input
+                          className="input input-mono"
+                          type="text"
+                          value={amount}
+                          onChange={(e) => {
+                            setAmount(e.target.value);
+                            if (betStep !== "idle") setBetStep("idle");
+                          }}
+                          style={{
+                            ...(isAmountBelowMin
+                              ? { borderColor: "var(--no)" }
+                              : {}),
+                          }}
+                        />
+                        <span className="unit">cUSDT</span>
+                      </div>
+                      {isAmountBelowMin && (
+                        <p style={{ fontSize: 11, color: "var(--no)", marginTop: 4 }}>
+                          Minimum bet is {minimumBetCUSDT} cUSDT
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Quick amount buttons */}
+                    <div className="row gap-2" style={{ marginBottom: 16 }}>
+                      {quickAmounts.map((qa) => (
+                        <button
+                          key={qa}
+                          className={`btn sm ${amount === String(qa) ? "primary" : "ghost"}`}
+                          type="button"
+                          onClick={() => {
+                            setAmount(String(qa));
+                            if (betStep !== "idle") setBetStep("idle");
+                          }}
+                          style={{ flex: 1, justifyContent: "center" }}
+                        >
+                          {qa}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Payout box */}
+                    <div
+                      style={{
+                        background: "var(--bg-1)",
+                        border: "1px solid var(--bd)",
+                        borderRadius: 8,
+                        padding: "14px 16px",
+                        marginBottom: 16,
+                        fontSize: 13,
+                      }}
+                    >
+                      <div className="row between" style={{ marginBottom: 6 }}>
+                        <span style={{ color: "var(--t-3)" }}>Stake</span>
+                        <span className="num">{amountNum.toLocaleString()} cUSDT</span>
+                      </div>
+                      <div className="row between" style={{ marginBottom: 10 }}>
+                        <span style={{ color: "var(--t-3)" }}>Odds</span>
+                        <span className="num">{multiplier}x</span>
+                      </div>
+                      <hr className="divider" />
+                      <div className="row between" style={{ marginTop: 10, marginBottom: 4, fontWeight: 600 }}>
+                        <span>Payout if correct</span>
+                        <span className="num">
+                          {parseFloat(payout).toLocaleString()} cUSDT
+                        </span>
+                      </div>
+                      <div className="row between">
+                        <span style={{ color: "var(--t-3)" }}>Profit</span>
+                        <span
+                          className="num"
+                          style={{
+                            fontWeight: 600,
+                            color: side === "YES" ? "var(--yes)" : "var(--no)",
+                          }}
+                        >
+                          +{parseFloat(profit).toLocaleString()} cUSDT
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Submit button */}
+                    <button
+                      className={`btn lg block ${side === "YES" ? "yes" : "no"}`}
+                      onClick={handlePlaceBet}
+                      disabled={
+                        betStep !== "idle" ||
+                        amountNum <= 0 ||
+                        isAmountBelowMin ||
+                        isBetWriting ||
+                        isBetConfirming
+                      }
+                      type="button"
+                      style={{ marginBottom: 12 }}
+                    >
+                      {betStep === "encrypting" ? (
+                        <>
+                          <LockIcon size={12} /> Encrypting via FHE...
+                        </>
+                      ) : betStep === "approving" ? (
+                        "Approving cUSDT..."
+                      ) : betStep === "writing" || isBetWriting ? (
+                        "Confirm in wallet..."
+                      ) : isBetConfirming ? (
+                        "Confirming on-chain..."
+                      ) : betStep === "confirmed" ? (
+                        <>
+                          <CheckIcon size={12} /> Bet placed
+                        </>
+                      ) : (
+                        <>
+                          <LockIcon size={12} /> Encrypt &amp; Bet {side} &middot;{" "}
+                          {amountNum}
+                        </>
+                      )}
+                    </button>
+
+                    {/* Error state */}
+                    {betStep === "error" && (
+                      <div
+                        style={{
+                          background: "var(--no-hi)",
+                          borderRadius: 8,
+                          padding: "10px 14px",
+                          marginBottom: 12,
+                          fontSize: 12,
+                        }}
+                      >
+                        <p style={{ color: "var(--no)", fontWeight: 500, marginBottom: 6 }}>
+                          {fhe.error || bet.error?.message || "Something went wrong"}
+                        </p>
+                        <button
+                          className="btn sm ghost"
+                          type="button"
+                          onClick={() => {
+                            setBetStep("idle");
+                            fhe.reset();
+                          }}
+                        >
+                          Retry
+                        </button>
                       </div>
                     )}
 
-                    {/* Local bet history */}
-                    {localPositions.length > 0 && (
-                      <div style={{ marginTop: "14px", borderTop: "1px solid var(--color-border-subtle)", paddingTop: "12px" }}>
-                        <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                          Bet history (local)
-                        </span>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "8px" }}>
-                          {localPositions.map((pos, i) => (
-                            <div
-                              key={pos.txHash || i}
+                    {bet.error && betStep !== "error" && (
+                      <div
+                        style={{
+                          background: "var(--no-hi)",
+                          borderRadius: 8,
+                          padding: "10px 14px",
+                          marginBottom: 12,
+                        }}
+                      >
+                        <p
+                          className="mono"
+                          style={{
+                            fontSize: 11,
+                            color: "var(--no)",
+                            wordBreak: "break-all",
+                          }}
+                        >
+                          {bet.error.message}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Privacy notice */}
+                    <div
+                      style={{
+                        background: "var(--enc-bg)",
+                        border: "1px solid var(--enc-bd)",
+                        borderRadius: 8,
+                        padding: "10px 14px",
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 8,
+                      }}
+                    >
+                      <LockIcon size={11} />
+                      <div style={{ fontSize: 11, color: "var(--enc)", lineHeight: 1.5 }}>
+                        <strong>Your bet is encrypted</strong>
+                        <br />
+                        Nobody can see your position. Only aggregate odds are public.
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Position section ────────────────────────────────── */}
+          {(hasPosition || localPositions.length > 0) && (
+            <div className="card" style={{ marginTop: 16 }}>
+              <div className="card-head">
+                <span className="row gap-2" style={{ gap: 6 }}>
+                  <LockIcon size={11} /> Your on-chain position
+                </span>
+              </div>
+              <div className="card-body">
+                {userDecrypt.isDecrypted ? (
+                  <div className="stack gap-4" style={{ gap: 8 }}>
+                    {userDecrypt.yesAmount !== null &&
+                      userDecrypt.yesAmount > BigInt(0) && (
+                        <div className="row between" style={{ padding: "8px 0" }}>
+                          <span className="pill yes">YES</span>
+                          <span className="reveal num" style={{ fontSize: 15 }}>
+                            {(
+                              Number(userDecrypt.yesAmount) / 1e6
+                            ).toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                            <span
                               style={{
-                                padding: "8px 10px",
-                                background: "var(--color-bg-base)",
-                                borderRadius: "var(--radius-sm)",
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                fontSize: "var(--text-xs)",
+                                marginLeft: 4,
+                                color: "var(--t-3)",
+                                fontSize: 11,
                               }}
                             >
-                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                <span className={`pill ${pos.side === "YES" ? "pill-yes" : "pill-no"}`} style={{ fontSize: "10px", padding: "1px 6px" }}>
-                                  {pos.side}
-                                </span>
-                                <span className="mono">{pos.amount} cUSDT</span>
-                              </div>
-                              <span className="mono" style={{ color: "var(--color-text-tertiary)" }}>
-                                @ {pos.entryOdds}%
-                              </span>
-                            </div>
-                          ))}
+                              cUSDT
+                            </span>
+                          </span>
                         </div>
-                      </div>
+                      )}
+                    {userDecrypt.noAmount !== null &&
+                      userDecrypt.noAmount > BigInt(0) && (
+                        <div className="row between" style={{ padding: "8px 0" }}>
+                          <span className="pill no">NO</span>
+                          <span className="reveal num" style={{ fontSize: 15 }}>
+                            {(
+                              Number(userDecrypt.noAmount) / 1e6
+                            ).toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                            <span
+                              style={{
+                                marginLeft: 4,
+                                color: "var(--t-3)",
+                                fontSize: 11,
+                              }}
+                            >
+                              cUSDT
+                            </span>
+                          </span>
+                        </div>
+                      )}
+                  </div>
+                ) : (
+                  <div className="stack gap-4" style={{ gap: 10 }}>
+                    <p style={{ fontSize: 12, color: "var(--t-3)" }}>
+                      Encrypted on-chain
+                    </p>
+                    <button
+                      className="btn secondary block"
+                      onClick={userDecrypt.decrypt}
+                      disabled={userDecrypt.isDecrypting}
+                      type="button"
+                    >
+                      <LockOpenIcon size={12} />
+                      {userDecrypt.isDecrypting
+                        ? "Decrypting via KMS..."
+                        : "Decrypt my position"}
+                    </button>
+                    {userDecrypt.isDecrypting && (
+                      <span
+                        className="shimmer mono"
+                        style={{ fontSize: 11, color: "var(--enc)" }}
+                      >
+                        decrypting...
+                      </span>
+                    )}
+                    {userDecrypt.error && (
+                      <p style={{ fontSize: 11, color: "var(--no)" }}>
+                        {userDecrypt.error}
+                      </p>
                     )}
                   </div>
                 )}
-              </>
-            )}
 
-            {/* Non-open, non-resolved, non-cancelled states (EXPIRED / RESOLVING) */}
-            {isConnected &&
-              !isMarketOpen &&
-              !isMarketResolved &&
-              !isMarketCancelled && (
-                <div
-                  style={{
-                    textAlign: "center",
-                    padding: "24px 16px",
-                    color: "var(--color-text-tertiary)",
-                    fontSize: "var(--text-sm)",
-                  }}
-                >
-                  <p style={{ marginBottom: "8px" }}>
-                    This market is{" "}
-                    <strong>
-                      {STATUS_LABELS[market.status ?? 0]?.toLowerCase()}
-                    </strong>
-                    .
-                  </p>
-                  <p>Betting is no longer available.</p>
-                </div>
-              )}
-          </div>
+                {/* Bet history */}
+                {localPositions.length > 0 && (
+                  <>
+                    <hr className="divider" style={{ margin: "14px 0 10px" }} />
+                    <div className="eyebrow" style={{ marginBottom: 8 }}>
+                      Bet history (this session)
+                    </div>
+                    <div className="stack gap-4" style={{ gap: 6 }}>
+                      {localPositions.map((pos, i) => (
+                        <div
+                          key={pos.txHash || i}
+                          className="row between"
+                          style={{ fontSize: 12, padding: "4px 0" }}
+                        >
+                          <div className="row gap-2" style={{ gap: 6 }}>
+                            <span
+                              className={`pill ${pos.side === "YES" ? "yes" : "no"}`}
+                              style={{ fontSize: 10 }}
+                            >
+                              {pos.side}
+                            </span>
+                            <span className="mono">
+                              {pos.amount} cUSDT
+                            </span>
+                          </div>
+                          <span
+                            className="mono"
+                            style={{ color: "var(--t-4)" }}
+                          >
+                            @ {pos.entryOdds}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

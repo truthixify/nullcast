@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Syne, DM_Sans, JetBrains_Mono } from "next/font/google";
 import "@rainbow-me/rainbowkit/styles.css";
-import "../styles/tokens.css";
-import "../styles/app.css";
+import "../styles/design.css";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 

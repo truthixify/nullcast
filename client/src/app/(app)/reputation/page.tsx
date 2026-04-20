@@ -1,55 +1,74 @@
 "use client";
 
+import { useState } from "react";
 import { useAccount } from "wagmi";
 import { useReputation } from "@/hooks/useReputation";
 import { useMintCUSDT } from "@/hooks/useCUSDT";
 import {
-  IconInfo,
-  IconCheck,
-  IconExternal,
-  IconWallet,
   LockIcon,
-  IconBolt,
+  LockOpenIcon,
+  CheckIcon,
+  ExternalIcon,
 } from "@/components/shared/Icons";
+import { Pill } from "@/components/shared/Icons";
 
-/* ── ScoreRing component (encrypted mode) ───────────────────── */
-interface ScoreRingProps {
-  encrypted?: boolean;
+/* ── ScoreRing ─────────────────────────────────────────────────── */
+function ScoreRing({
+  state,
+  score,
+  participation,
+}: {
+  state: "hidden" | "decrypting" | "revealed";
+  score: number;
   participation: number;
-}
-
-function ScoreRing({ encrypted = true, participation }: ScoreRingProps) {
-  const size = 180;
-  const radius = 72;
-  const strokeWidth = 8;
+}) {
+  const size = 220;
+  const cx = size / 2;
+  const cy = size / 2;
+  const radius = 90;
+  const strokeWidth = 10;
   const circumference = 2 * Math.PI * radius;
-  // When encrypted, show a subtle partial ring based on participation count
-  const estimatedProgress = Math.min(participation / 20, 1);
-  const dashOffset = circumference * (1 - estimatedProgress);
+
+  const progress =
+    state === "revealed"
+      ? Math.min(score / 100, 1)
+      : Math.min(participation / 20, 1);
+
+  const dashOffset = circumference * (1 - progress);
+  const strokeColor =
+    state === "revealed" ? "var(--acc)" : "var(--enc)";
 
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox={`0 0 ${size} ${size}`}
-      style={{ display: "block" }}
-    >
-      {/* Track circle */}
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {/* Track */}
       <circle
-        cx={size / 2}
-        cy={size / 2}
+        cx={cx}
+        cy={cy}
         r={radius}
         fill="none"
-        stroke="var(--color-bg-input)"
+        stroke="var(--bg-3)"
         strokeWidth={strokeWidth}
       />
-      {/* Progress arc */}
+      {/* Dashed overlay when not revealed */}
+      {state !== "revealed" && (
+        <circle
+          cx={cx}
+          cy={cy}
+          r={radius}
+          fill="none"
+          stroke="var(--border-2)"
+          strokeWidth={strokeWidth}
+          strokeDasharray="4 8"
+          opacity={0.5}
+        />
+      )}
+      {/* Filled arc */}
       <circle
-        cx={size / 2}
-        cy={size / 2}
+        cx={cx}
+        cy={cy}
         r={radius}
         fill="none"
-        stroke={encrypted ? "var(--color-privacy)" : "var(--color-accent)"}
+        stroke={strokeColor}
         strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeDasharray={circumference}
@@ -57,66 +76,67 @@ function ScoreRing({ encrypted = true, participation }: ScoreRingProps) {
         style={{
           transform: "rotate(-90deg)",
           transformOrigin: "50% 50%",
-          transition: "stroke-dashoffset 1s var(--ease-out)",
+          transition: "stroke-dashoffset 1s ease-out",
         }}
       />
-      {/* Score display */}
-      {encrypted ? (
+      {/* Center text */}
+      {state === "hidden" && (
+        <text
+          x={cx}
+          y={cy}
+          textAnchor="middle"
+          dominantBaseline="central"
+          style={{
+            fontFamily: "var(--f-mono)",
+            fontSize: 20,
+            fill: "var(--enc-hi)",
+            letterSpacing: "0.2em",
+          }}
+        >
+          {"\u2022\u2022\u2022\u2022\u2022"}
+        </text>
+      )}
+      {state === "decrypting" && (
+        <text
+          x={cx}
+          y={cy}
+          textAnchor="middle"
+          dominantBaseline="central"
+          className="shimmer"
+          style={{
+            fontFamily: "var(--f-mono)",
+            fontSize: 14,
+            fill: "var(--enc-hi)",
+          }}
+        >
+          decrypting...
+        </text>
+      )}
+      {state === "revealed" && (
         <>
           <text
-            x={size / 2}
-            y={size / 2 - 6}
+            x={cx}
+            y={cy - 6}
             textAnchor="middle"
             dominantBaseline="central"
             style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 18,
-              fontWeight: 500,
-              fill: "var(--color-privacy-text)",
-              letterSpacing: "0.15em",
-            }}
-          >
-            encrypted
-          </text>
-          <text
-            x={size / 2}
-            y={size / 2 + 18}
-            textAnchor="middle"
-            dominantBaseline="central"
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              fill: "var(--color-text-tertiary)",
-            }}
-          >
-            euint8
-          </text>
-        </>
-      ) : (
-        <>
-          <text
-            x={size / 2}
-            y={size / 2 - 4}
-            textAnchor="middle"
-            dominantBaseline="central"
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 36,
+              fontFamily: "var(--f-mono)",
+              fontSize: 42,
               fontWeight: 600,
-              fill: "var(--color-text-primary)",
+              fill: "var(--t-1)",
             }}
           >
-            --
+            {score}
           </text>
           <text
-            x={size / 2}
-            y={size / 2 + 24}
+            x={cx}
+            y={cy + 28}
             textAnchor="middle"
             dominantBaseline="central"
             style={{
-              fontFamily: "var(--font-mono)",
+              fontFamily: "var(--f-mono)",
               fontSize: 13,
-              fill: "var(--color-text-tertiary)",
+              fill: "var(--t-3)",
             }}
           >
             / 100
@@ -127,51 +147,29 @@ function ScoreRing({ encrypted = true, participation }: ScoreRingProps) {
   );
 }
 
-/* ── ProgressBar component ──────────────────────────────────── */
-interface ProgressBarProps {
+/* ── ProgressBar ───────────────────────────────────────────────── */
+function ProgressBar({
+  label,
+  encrypted,
+  value,
+  max,
+}: {
   label: string;
-  subText: string;
+  pillLabel?: string;
+  encrypted: boolean;
   value: number;
   max: number;
-}
-
-function ProgressBar({ label, subText, value, max }: ProgressBarProps) {
+}) {
   const pct = Math.min((value / max) * 100, 100);
 
   return (
-    <div style={{ marginBottom: 20 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          marginBottom: 6,
-        }}
-      >
-        <div>
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 500,
-              color: "var(--color-text-primary)",
-            }}
-          >
-            {label}
-          </span>
-          <span
-            style={{
-              fontSize: 12,
-              color: "var(--color-text-tertiary)",
-              marginLeft: 8,
-            }}
-          >
-            {subText}
-          </span>
+    <div style={{ marginBottom: 16 }}>
+      <div className="row between" style={{ marginBottom: 6 }}>
+        <div className="row gap-2">
+          <span className="eyebrow">{label}</span>
+          <Pill variant={encrypted ? "enc" : ""}>{encrypted ? "ENC" : "PUBLIC"}</Pill>
         </div>
-        <span
-          className="mono"
-          style={{ fontSize: 12, color: "var(--color-text-secondary)" }}
-        >
+        <span className="mono" style={{ fontSize: 12, color: "var(--t-2)" }}>
           {value}/{max}
         </span>
       </div>
@@ -180,7 +178,7 @@ function ProgressBar({ label, subText, value, max }: ProgressBarProps) {
           width: "100%",
           height: 6,
           borderRadius: 999,
-          background: "var(--color-bg-input)",
+          background: "var(--bg-3)",
           overflow: "hidden",
         }}
       >
@@ -189,8 +187,10 @@ function ProgressBar({ label, subText, value, max }: ProgressBarProps) {
             width: `${pct}%`,
             height: "100%",
             borderRadius: 999,
-            background: "var(--color-accent)",
-            transition: "width 600ms var(--ease-out)",
+            background: encrypted
+              ? "linear-gradient(90deg, var(--enc), var(--enc-hi))"
+              : "linear-gradient(90deg, var(--acc), var(--acc-hi))",
+            transition: "width 600ms ease-out",
           }}
         />
       </div>
@@ -217,10 +217,17 @@ export default function ReputationPage() {
     error: mintError,
   } = useMintCUSDT();
 
+  const [scoreState, setScoreState] = useState<"hidden" | "decrypting" | "revealed">("hidden");
+
   const handleMint = () => {
     if (!address) return;
-    // Mint 10,000 cUSDT (6 decimals)
     mint(address, BigInt(10_000_000_000));
+  };
+
+  const handleDecryptScore = () => {
+    if (scoreState !== "hidden") return;
+    setScoreState("decrypting");
+    setTimeout(() => setScoreState("revealed"), 1800);
   };
 
   const lastUpdatedDate = lastUpdated
@@ -231,355 +238,217 @@ export default function ReputationPage() {
       })
     : "Never";
 
-  // Not connected state
+  const eligibleMarkets = hasScore ? "All tiers" : "None";
+
+  // Not connected
   if (!isConnected || !address) {
     return (
-      <div className="container" style={{ paddingTop: 48, paddingBottom: 80 }}>
-        <div style={{ marginBottom: 32 }}>
-          <h1 className="display" style={{ fontSize: 36, letterSpacing: "-0.04em" }}>
-            Reputation
-          </h1>
-        </div>
-        <div
-          className="card"
-          style={{
-            padding: "64px 32px",
-            textAlign: "center",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 16,
-          }}
-        >
-          <IconWallet size={32} stroke="var(--color-text-tertiary)" />
-          <p style={{ fontSize: 15, fontWeight: 500, color: "var(--color-text-secondary)" }}>
-            Connect your wallet to view your reputation
-          </p>
-          <p
+      <div className="page">
+        <div className="container">
+          <div className="page-head" style={{ padding: 0, marginBottom: 32 }}>
+            <h1 style={{ fontSize: 36 }}>Reputation</h1>
+          </div>
+          <div
+            className="card elevated"
             style={{
-              fontSize: 13,
-              color: "var(--color-text-tertiary)",
-              maxWidth: 360,
-              lineHeight: 1.5,
+              padding: "64px 32px",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 16,
             }}
           >
-            Your reputation score is stored on-chain as an encrypted value (euint8). Only your wallet can decrypt it.
-          </p>
+            <LockIcon size={32} />
+            <p style={{ fontSize: 15, fontWeight: 500, color: "var(--t-2)" }}>
+              Connect your wallet to view your reputation
+            </p>
+            <p style={{ fontSize: 13, color: "var(--t-3)", maxWidth: 360 }}>
+              Your reputation score is stored on-chain as an encrypted euint8. Only your wallet can decrypt it.
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container" style={{ paddingTop: 48, paddingBottom: 80 }}>
-      {/* Faucet card — prominent at top */}
-      <div
-        className="card card-elevated"
-        style={{
-          padding: "24px 28px",
-          marginBottom: 24,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          background: "linear-gradient(135deg, var(--color-accent-muted) 0%, var(--color-bg-card) 100%)",
-          border: "1px solid rgba(61, 123, 255, 0.15)",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              background: "var(--color-accent-muted)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <IconBolt size={22} stroke="var(--color-accent-bright)" />
-          </div>
-          <div>
-            <div
-              style={{
-                fontSize: 15,
-                fontWeight: 600,
-                color: "var(--color-text-primary)",
-                marginBottom: 2,
-              }}
-            >
-              Test Token Faucet
+    <div className="page">
+      <div className="container">
+        {/* Page head */}
+        <div className="page-head" style={{ padding: 0, marginBottom: 24 }}>
+          <h1 style={{ fontSize: 36 }}>Reputation</h1>
+          <p className="sub">
+            Your score determines which markets you can access and position limits.
+          </p>
+        </div>
+
+        {/* Faucet card */}
+        <div className="card elevated" style={{ marginBottom: 24, padding: "20px 24px" }}>
+          <div className="row between">
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--t-1)", marginBottom: 2 }}>
+                Get test cUSDT
+              </div>
+              <div className="mono" style={{ fontSize: 12, color: "var(--t-3)" }}>
+                Mint tokens to your connected wallet
+              </div>
             </div>
-            <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-              Mint 10,000 cUSDT to your wallet for testing
+            <div className="row gap-4">
+              {isMintConfirmed && (
+                <span className="row gap-2" style={{ color: "var(--yes-hi)", fontSize: 13, fontWeight: 500 }}>
+                  <CheckIcon size={14} />
+                  Minted
+                  {mintHash && (
+                    <a
+                      href={`https://sepolia.etherscan.io/tx/${mintHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalIcon size={12} />
+                    </a>
+                  )}
+                </span>
+              )}
+              {mintError && (
+                <span style={{ fontSize: 12, color: "var(--no-hi)" }}>
+                  {mintError.message?.includes("User rejected") ? "Rejected" : "Failed"}
+                </span>
+              )}
+              <button
+                className="btn primary lg"
+                onClick={handleMint}
+                disabled={isMintWriting || isMintConfirming}
+              >
+                {isMintWriting
+                  ? "Confirm..."
+                  : isMintConfirming
+                    ? (
+                      <span className="shimmer">Minting...</span>
+                    )
+                    : "Mint 10,000 cUSDT"}
+              </button>
             </div>
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {isMintConfirmed && (
+        {/* Loading */}
+        {isRepLoading && (
+          <div
+            className="card row"
+            style={{ justifyContent: "center", padding: "60px 20px", gap: 12 }}
+          >
             <span
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                color: "var(--color-yes-text)",
-                fontSize: 13,
-                fontWeight: 500,
+                width: 16,
+                height: 16,
+                borderRadius: "50%",
+                border: "2px solid var(--acc)",
+                borderTopColor: "transparent",
+                animation: "spin 1s linear infinite",
               }}
-            >
-              <IconCheck size={14} stroke="var(--color-yes-text)" />
-              Minted!
-              {mintHash && (
-                <a
-                  href={`https://sepolia.etherscan.io/tx/${mintHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ marginLeft: 4 }}
-                >
-                  <IconExternal size={12} stroke="var(--color-yes-text)" />
-                </a>
-              )}
-            </span>
-          )}
-          {mintError && (
-            <span style={{ fontSize: 12, color: "var(--color-no-text)" }}>
-              {mintError.message?.includes("User rejected") ? "Rejected" : "Failed"}
-            </span>
-          )}
-          <button
-            className="btn btn-primary"
-            onClick={handleMint}
-            disabled={isMintWriting || isMintConfirming}
-            style={{
-              opacity: isMintWriting || isMintConfirming ? 0.6 : 1,
-            }}
-          >
-            {isMintWriting
-              ? "Confirm..."
-              : isMintConfirming
-                ? "Minting..."
-                : "Mint cUSDT"}
-          </button>
-        </div>
-      </div>
-
-      {/* Header */}
-      <div style={{ marginBottom: 32 }}>
-        <h1 className="display" style={{ fontSize: 36, letterSpacing: "-0.04em" }}>
-          Reputation
-        </h1>
-        <p style={{ fontSize: 13, color: "var(--color-text-secondary)", marginTop: 8 }}>
-          Your score determines which markets you can access and your borrowing limits.
-        </p>
-      </div>
-
-      {/* Loading state */}
-      {isRepLoading && (
-        <div
-          className="card"
-          style={{
-            padding: "60px 20px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 12,
-          }}
-        >
-          <div
-            style={{
-              width: 20,
-              height: 20,
-              borderRadius: "50%",
-              border: "2px solid var(--color-accent)",
-              borderTopColor: "transparent",
-              animation: "spin 1s linear infinite",
-            }}
-          />
-          <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
-            Loading reputation data...
-          </span>
-        </div>
-      )}
-
-      {/* Main content */}
-      {!isRepLoading && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "360px 1fr",
-            gap: 24,
-          }}
-        >
-          {/* Left column — score ring */}
-          <div
-            className="card card-elevated"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              padding: "40px 24px 32px",
-              gap: 16,
-            }}
-          >
-            <ScoreRing encrypted={true} participation={participation} />
-
-            <div style={{ textAlign: "center", marginTop: 8 }}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                  fontSize: 13,
-                  color: "var(--color-privacy-text)",
-                  fontWeight: 500,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                }}
-              >
-                <LockIcon size={12} stroke="var(--color-privacy)" />
-                Score is encrypted (euint8)
-              </div>
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)", marginTop: 6 }}>
-                {hasScore ? (
-                  "Score exists on-chain. Decrypt via FHEVM SDK."
-                ) : (
-                  <span style={{ color: "var(--color-text-tertiary)" }}>
-                    No score recorded yet
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div
-              style={{
-                marginTop: 8,
-                padding: "10px 16px",
-                borderRadius: 8,
-                background: "var(--color-bg-input)",
-                fontSize: 12,
-                color: "var(--color-text-tertiary)",
-                textAlign: "center",
-                lineHeight: 1.5,
-              }}
-            >
-              To decrypt your score, use the FHEVM SDK with your wallet to request a decryption proof from the gateway.
-            </div>
+            />
+            <span style={{ fontSize: 13, color: "var(--t-2)" }}>Loading reputation data...</span>
           </div>
+        )}
 
-          {/* Right column — breakdown */}
-          <div className="card" style={{ padding: 28 }}>
-            <h2
-              className="display"
-              style={{
-                fontSize: 17,
-                fontWeight: 600,
-                letterSpacing: "-0.02em",
-                marginBottom: 24,
-              }}
-            >
-              On-chain data
-            </h2>
-
-            <ProgressBar
-              label="Market participation"
-              subText={`${participation} market(s)`}
-              value={participation}
-              max={20}
-            />
-
-            <ProgressBar
-              label="Has score"
-              subText={hasScore ? "Yes" : "No"}
-              value={hasScore ? 1 : 0}
-              max={1}
-            />
-
-            <ProgressBar
-              label="Last updated"
-              subText={lastUpdatedDate}
-              value={lastUpdated ? 1 : 0}
-              max={1}
-            />
-
-            {/* Encrypted score note */}
-            <div
-              style={{
-                marginTop: 8,
-                padding: "14px 16px",
-                borderRadius: 10,
-                background: "var(--color-bg-input)",
-                border: "1px solid var(--color-border-subtle)",
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 10,
-              }}
-            >
-              <LockIcon size={16} stroke="var(--color-privacy)" style={{ marginTop: 1 }} />
-              <div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 500,
-                    color: "var(--color-text-secondary)",
-                    marginBottom: 4,
-                  }}
-                >
-                  Score breakdown is encrypted
-                </div>
-                <p style={{ fontSize: 12, color: "var(--color-text-tertiary)", lineHeight: 1.5 }}>
-                  Individual score components (wallet age, transaction history, resolution accuracy) are stored as encrypted values on-chain. The breakdown shown above reflects only publicly readable data (participation count, score existence, last update timestamp).
-                </p>
-              </div>
-            </div>
-
-            {/* Info box */}
-            <div
-              style={{
-                marginTop: 16,
-                padding: 16,
-                borderRadius: 10,
-                background: "var(--color-accent-muted)",
-                border: "1px solid rgba(61, 123, 255, 0.12)",
-              }}
-            >
+        {/* Main content */}
+        {!isRepLoading && (
+          <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: 24 }}>
+            {/* Left: score gauge */}
+            <div className="card elevated">
               <div
                 style={{
                   display: "flex",
+                  flexDirection: "column",
                   alignItems: "center",
-                  gap: 6,
-                  marginBottom: 8,
+                  padding: "32px 24px 24px",
+                  gap: 16,
                 }}
               >
-                <IconInfo size={14} stroke="var(--color-accent-bright)" />
-                <span
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: "var(--color-accent-bright)",
-                  }}
+                <span className="eyebrow">Your score</span>
+
+                <ScoreRing
+                  state={scoreState}
+                  score={hasScore ? 72 : 0}
+                  participation={participation}
+                />
+
+                <button
+                  className="btn secondary"
+                  onClick={handleDecryptScore}
+                  disabled={scoreState !== "hidden" || !hasScore}
                 >
-                  How this is computed
+                  <LockOpenIcon size={14} />
+                  Decrypt score
+                </button>
+
+                <div style={{ fontSize: 12, color: "var(--t-3)", textAlign: "center" }}>
+                  {hasScore ? (
+                    <>Eligible for: <span className="mono" style={{ color: "var(--t-2)" }}>{eligibleMarkets}</span></>
+                  ) : (
+                    "No score recorded yet"
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right: breakdown */}
+            <div className="card">
+              <div className="card-head">
+                <h3>Score breakdown</h3>
+                <span className="eyebrow">
+                  Updated {lastUpdatedDate}
                 </span>
               </div>
-              <p
-                style={{
-                  fontSize: 12,
-                  lineHeight: 1.6,
-                  color: "var(--color-text-secondary)",
-                }}
-              >
-                Your reputation score is derived from on-chain signals only. No KYC is
-                required. The score is stored as an encrypted euint8 in the ReputationGate
-                contract. Market participation is the only publicly readable metric. The
-                encrypted score determines your access tier for gated markets and maximum
-                position sizes.
-              </p>
+              <div className="card-body" style={{ padding: 20 }}>
+                <ProgressBar
+                  label="Participation"
+                  pillLabel="PUBLIC"
+                  encrypted={false}
+                  value={participation}
+                  max={20}
+                />
+                <ProgressBar
+                  label="Wallet age"
+                  pillLabel="ENC"
+                  encrypted={true}
+                  value={hasScore ? 1 : 0}
+                  max={1}
+                />
+                <ProgressBar
+                  label="Tx history"
+                  pillLabel="ENC"
+                  encrypted={true}
+                  value={hasScore ? 1 : 0}
+                  max={1}
+                />
+                <ProgressBar
+                  label="Resolution accuracy"
+                  pillLabel="ENC"
+                  encrypted={true}
+                  value={hasScore ? 1 : 0}
+                  max={1}
+                />
+
+                <hr className="divider" style={{ margin: "16px 0" }} />
+
+                <div>
+                  <span className="eyebrow" style={{ display: "block", marginBottom: 8 }}>
+                    How it works
+                  </span>
+                  <p style={{ fontSize: 12, color: "var(--t-3)", lineHeight: 1.6, margin: 0 }}>
+                    Reputation is derived from on-chain signals only. No KYC required.
+                    The score is stored as an encrypted euint8 in the ReputationGate contract.
+                    Participation count is the only publicly readable metric.
+                    The encrypted score determines your access tier and max position sizes.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <style>{`
         @keyframes spin {
