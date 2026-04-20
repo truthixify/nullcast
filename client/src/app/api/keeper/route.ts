@@ -29,27 +29,53 @@ const poolAbi = parseAbi([
 const ZERO_HANDLE = ("0x" + "0".repeat(64)) as `0x${string}`;
 
 /**
- * Public decrypt via Zama relayer REST API (no WASM needed).
- * POST /v1/public-decrypt with handles array.
+ * Public decrypt via Zama relayer REST API.
+ * 1. POST /v2/public-decrypt → queues a job
+ * 2. GET /v2/public-decrypt/:jobId → poll until succeeded
+ * Returns the decrypted value as bigint.
  */
 async function publicDecryptViaRelayer(
-  handles: string[]
-): Promise<{ clearValues: Record<string, bigint>; decryptionProof: string } | null> {
+  handle: string
+): Promise<bigint | null> {
   try {
-    const res = await fetch(`${RELAYER_URL}/public-decrypt`, {
+    // Step 1: Submit decrypt request
+    const submitRes = await fetch(`${RELAYER_URL}/public-decrypt`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ handles }),
+      body: JSON.stringify({
+        ciphertextHandles: [handle],
+        extraData: "0x00",
+      }),
     });
 
-    if (!res.ok) {
-      const text = await res.text();
-      console.error(`Relayer error ${res.status}: ${text}`);
+    const submitData = await submitRes.json();
+    if (submitData.status !== "queued" || !submitData.result?.jobId) {
+      console.error("Relayer submit failed:", JSON.stringify(submitData));
       return null;
     }
 
-    const data = await res.json();
-    return data;
+    const jobId = submitData.result.jobId;
+
+    // Step 2: Poll for result (max 30s)
+    for (let attempt = 0; attempt < 15; attempt++) {
+      await new Promise((r) => setTimeout(r, 2000));
+
+      const pollRes = await fetch(`${RELAYER_URL}/public-decrypt/${jobId}`);
+      const pollData = await pollRes.json();
+
+      if (pollData.status === "succeeded" && pollData.result?.decryptedValue) {
+        return BigInt("0x" + pollData.result.decryptedValue);
+      }
+
+      if (pollData.status === "failed") {
+        console.error("Relayer decrypt failed:", JSON.stringify(pollData));
+        return null;
+      }
+      // Still processing, continue polling
+    }
+
+    console.error("Relayer decrypt timed out for job:", jobId);
+    return null;
   } catch (err) {
     console.error("Relayer request failed:", err);
     return null;
@@ -127,24 +153,14 @@ export async function GET() {
         continue;
       }
 
-      // Attempt public decrypt via relayer
-      const decryptResult = await publicDecryptViaRelayer([handle]);
+      // Decrypt via Zama relayer (async: submit → poll)
+      const clearValue = await publicDecryptViaRelayer(handle);
 
-      if (!decryptResult) {
+      if (clearValue === null) {
         results.push({
           marketId: i,
           pool: poolAddr,
           action: "relayer decrypt failed",
-        });
-        continue;
-      }
-
-      const clearValue = decryptResult.clearValues[handle];
-      if (clearValue === undefined) {
-        results.push({
-          marketId: i,
-          pool: poolAddr,
-          action: "no clear value in response",
         });
         continue;
       }
