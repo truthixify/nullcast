@@ -295,8 +295,12 @@ export async function GET() {
           });
         }
       }
-    } catch {
-      // VaultFactory might not exist or have no vaults — not an error
+    } catch (vaultErr) {
+      vaultResults.push({
+        vaultId: -1,
+        vault: CONTRACT_ADDRESSES.VaultFactory,
+        action: `factory error: ${vaultErr instanceof Error ? vaultErr.message : "unknown"}`,
+      });
     }
 
     const allResults = [...results.map(r => ({ ...r, type: "pool" as const })), ...vaultResults.map(r => ({ ...r, type: "vault" as const }))];
