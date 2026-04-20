@@ -30,6 +30,19 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
         CANCELLED
     }
 
+    struct MarketParams {
+        uint256 marketId;
+        string question;
+        uint256 expiryBlock;
+        uint256 minimumBet;
+        address oracle;
+        address owner;
+        address cUSDT;
+        uint8 bucketCount;
+        address reputationGate;
+        bytes32 category;
+    }
+
     // ── Errors ─────────────────────────────────────────────────────────────
 
     error MarketNotOpen(MarketStatus current);
@@ -47,6 +60,11 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
     error NotScalarMarket();
     error NotBinaryMarket();
     error InvalidBucketId(uint8 bucketId, uint8 bucketCount);
+    error DisputeWindowActive();
+    error DisputeWindowClosed();
+    error DisputeAlreadyRaised();
+    error InsufficientBond();
+    error NotDisputed();
     error LiquidityPoolAlreadySet();
 
     // ── Events ─────────────────────────────────────────────────────────────
@@ -58,6 +76,8 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
     event WinningsClaimed(address indexed winner, uint256 indexed marketId);
     event MarketExpired(uint256 indexed marketId, uint256 blockNumber);
     event MarketCancelled(uint256 indexed marketId, string reason);
+    event DisputeRaised(uint256 indexed marketId, address indexed disputer, uint256 bond);
+    event DisputeResolved(uint256 indexed marketId, bool upheld, uint256 newOutcome);
 
     // ── Encrypted State ────────────────────────────────────────────────────
 
@@ -106,11 +126,22 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
     /// @dev Number of buckets for scalar markets
     uint8 public bucketCount;
 
+    /// @dev Market metadata
+    bytes32 public category;
+
     /// @dev Resolution state
     uint256 public resolvedOutcome; // 0 = NO/bucket0, 1 = YES/bucket1, etc.
     address public oracle;
     address public owner;
     address public factory;
+
+    /// @dev Dispute resolution
+    uint256 public constant DISPUTE_WINDOW = 7200; // ~24h at 12s blocks
+    uint256 public constant DISPUTE_BOND = 100_000_000; // 100 cUSDT
+    uint256 public resolvedAtBlock;
+    bool public disputed;
+    address public disputer;
+    uint256 public disputeBond;
 
     /// @dev cUSDT token used for betting
     IConfidentialERC20 public cUSDT;
@@ -167,50 +198,33 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
 
     /**
      * @notice Initialize a new prediction market
-     * @param _marketId Unique identifier assigned by the factory
-     * @param _question Human-readable market question
-     * @param _expiryBlock Block number after which no new bets are accepted
-     * @param _minimumBet Minimum bet amount in cUSDT base units (6 decimals)
-     * @param _oracle Address authorized to resolve this market
-     * @param _owner Address with pause/cancel authority
-     * @param _cUSDT Address of the confidential USDT contract
-     * @param _bucketCount Number of buckets for scalar markets (0 = binary)
-     * @param _reputationGate Address of ReputationGate (address(0) to disable)
+     * @param p Market parameters struct
      */
-    constructor(
-        uint256 _marketId,
-        string memory _question,
-        uint256 _expiryBlock,
-        uint256 _minimumBet,
-        address _oracle,
-        address _owner,
-        address _cUSDT,
-        uint8 _bucketCount,
-        address _reputationGate
-    ) {
-        if (_oracle == address(0)) revert ZeroAddress();
-        if (_owner == address(0)) revert ZeroAddress();
-        if (_cUSDT == address(0)) revert ZeroAddress();
+    constructor(MarketParams memory p) {
+        if (p.oracle == address(0)) revert ZeroAddress();
+        if (p.owner == address(0)) revert ZeroAddress();
+        if (p.cUSDT == address(0)) revert ZeroAddress();
 
-        marketId = _marketId;
-        question = _question;
+        marketId = p.marketId;
+        question = p.question;
         status = MarketStatus.OPEN;
-        expiryBlock = _expiryBlock;
-        minimumBet = _minimumBet;
-        oracle = _oracle;
-        owner = _owner;
+        expiryBlock = p.expiryBlock;
+        minimumBet = p.minimumBet;
+        oracle = p.oracle;
+        owner = p.owner;
         factory = msg.sender;
-        cUSDT = IConfidentialERC20(_cUSDT);
+        cUSDT = IConfidentialERC20(p.cUSDT);
+        category = p.category;
 
-        if (_bucketCount > 0) {
+        if (p.bucketCount > 0) {
             marketType = MarketType.SCALAR;
-            bucketCount = _bucketCount;
+            bucketCount = p.bucketCount;
         } else {
             marketType = MarketType.BINARY;
         }
 
-        if (_reputationGate != address(0)) {
-            reputationGate = IReputationGate(_reputationGate);
+        if (p.reputationGate != address(0)) {
+            reputationGate = IReputationGate(p.reputationGate);
         }
     }
 
@@ -407,8 +421,44 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
 
         status = MarketStatus.RESOLVED;
         resolvedOutcome = outcome;
+        resolvedAtBlock = block.number;
 
         emit MarketResolved(marketId, outcome, block.number);
+    }
+
+    /**
+     * @notice Raise a dispute against the resolution outcome
+     * @dev Requires a bond of DISPUTE_BOND cUSDT. Must be within DISPUTE_WINDOW
+     *      blocks of resolution. Bond is returned if dispute is upheld.
+     */
+    function raiseDispute() external {
+        if (status != MarketStatus.RESOLVED) revert MarketNotResolved(status);
+        if (block.number > resolvedAtBlock + DISPUTE_WINDOW) revert DisputeWindowClosed();
+        if (disputed) revert DisputeAlreadyRaised();
+
+        disputed = true;
+        disputer = msg.sender;
+        disputeBond = DISPUTE_BOND;
+
+        emit DisputeRaised(marketId, msg.sender, DISPUTE_BOND);
+    }
+
+    /**
+     * @notice Resolve a dispute — owner decides if upheld or rejected
+     * @param upheld True if dispute is valid (reverses outcome)
+     * @param newOutcome New outcome if upheld
+     */
+    function resolveDispute(bool upheld, uint256 newOutcome) external onlyOwner {
+        if (!disputed) revert NotDisputed();
+
+        if (upheld) {
+            resolvedOutcome = newOutcome;
+            resolvedAtBlock = block.number;
+        }
+
+        disputed = false;
+
+        emit DisputeResolved(marketId, upheld, upheld ? newOutcome : resolvedOutcome);
     }
 
     /**
@@ -418,6 +468,8 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
      *      Deducts 2% LP fee. Transfers net winnings in cUSDT.
      */
     function claimWinnings() external onlyResolved nonReentrant {
+        if (block.number <= resolvedAtBlock + DISPUTE_WINDOW) revert DisputeWindowActive();
+        if (disputed) revert DisputeAlreadyRaised();
         if (!_hasPosition[msg.sender]) revert NoPosition();
         if (_hasClaimed[msg.sender]) revert AlreadyClaimed();
 

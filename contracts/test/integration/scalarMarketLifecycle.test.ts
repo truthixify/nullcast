@@ -19,17 +19,18 @@ describe("Scalar Market Lifecycle", function () {
 
     // Deploy scalar market directly (3 buckets: <$80k, $80k-$100k, >$100k)
     const NullCastMarket = await ethers.getContractFactory("NullCastMarket");
-    const market = await NullCastMarket.deploy(
-      0,
-      "BTC price range on May 10: <$80k / $80k-$100k / >$100k",
-      expiryBlock,
-      1_000_000,
-      oracle.address,
-      owner.address,
-      cUSDTAddr,
-      3, // 3 buckets
-      ethers.ZeroAddress // no reputation gate
-    );
+    const market = await NullCastMarket.deploy({
+      marketId: 0,
+      question: "BTC price range on May 10: <$80k / $80k-$100k / >$100k",
+      expiryBlock: expiryBlock,
+      minimumBet: 1_000_000,
+      oracle: oracle.address,
+      owner: owner.address,
+      cUSDT: cUSDTAddr,
+      bucketCount: 3,
+      reputationGate: ethers.ZeroAddress,
+      category: ethers.encodeBytes32String("CRYPTO"),
+    });
     await market.waitForDeployment();
     const marketAddr = await market.getAddress();
 
@@ -86,6 +87,9 @@ describe("Scalar Market Lifecycle", function () {
     expect(await market.status()).to.equal(3); // RESOLVED
     expect(await market.resolvedOutcome()).to.equal(1);
 
+    // Mine past dispute window (7200 blocks) so claimWinnings can be called
+    await hre.network.provider.send("hardhat_mine", ["0x1C21"]);
+
     // Bob (bucket 1 winner) claims — but we need publicBucketPools[1] set
     // The contract uses publicBucketPools for division in _claimScalarWinnings
     // We haven't submitted the bucket pool publicly yet, so this will revert
@@ -111,10 +115,18 @@ describe("Scalar Market Lifecycle", function () {
 
     const currentBlock = await ethers.provider.getBlockNumber();
     const NullCastMarket = await ethers.getContractFactory("NullCastMarket");
-    const market = await NullCastMarket.deploy(
-      0, "Binary market", currentBlock + 1000, 1_000_000,
-      oracle.address, owner.address, await cUSDT.getAddress(), 0, ethers.ZeroAddress
-    );
+    const market = await NullCastMarket.deploy({
+      marketId: 0,
+      question: "Binary market",
+      expiryBlock: currentBlock + 1000,
+      minimumBet: 1_000_000,
+      oracle: oracle.address,
+      owner: owner.address,
+      cUSDT: await cUSDT.getAddress(),
+      bucketCount: 0,
+      reputationGate: ethers.ZeroAddress,
+      category: ethers.ZeroHash,
+    });
     await market.waitForDeployment();
 
     await cUSDT.mint(owner.address, 10_000_000_000);
@@ -137,10 +149,18 @@ describe("Scalar Market Lifecycle", function () {
 
     const currentBlock = await ethers.provider.getBlockNumber();
     const NullCastMarket = await ethers.getContractFactory("NullCastMarket");
-    const market = await NullCastMarket.deploy(
-      0, "Scalar market", currentBlock + 1000, 1_000_000,
-      oracle.address, owner.address, await cUSDT.getAddress(), 3, ethers.ZeroAddress
-    );
+    const market = await NullCastMarket.deploy({
+      marketId: 0,
+      question: "Scalar market",
+      expiryBlock: currentBlock + 1000,
+      minimumBet: 1_000_000,
+      oracle: oracle.address,
+      owner: owner.address,
+      cUSDT: await cUSDT.getAddress(),
+      bucketCount: 3,
+      reputationGate: ethers.ZeroAddress,
+      category: ethers.ZeroHash,
+    });
     await market.waitForDeployment();
 
     await cUSDT.mint(owner.address, 10_000_000_000);
@@ -163,10 +183,18 @@ describe("Scalar Market Lifecycle", function () {
 
     const currentBlock = await ethers.provider.getBlockNumber();
     const NullCastMarket = await ethers.getContractFactory("NullCastMarket");
-    const market = await NullCastMarket.deploy(
-      0, "Scalar", currentBlock + 1000, 1_000_000,
-      oracle.address, owner.address, await cUSDT.getAddress(), 3, ethers.ZeroAddress
-    );
+    const market = await NullCastMarket.deploy({
+      marketId: 0,
+      question: "Scalar",
+      expiryBlock: currentBlock + 1000,
+      minimumBet: 1_000_000,
+      oracle: oracle.address,
+      owner: owner.address,
+      cUSDT: await cUSDT.getAddress(),
+      bucketCount: 3,
+      reputationGate: ethers.ZeroAddress,
+      category: ethers.ZeroHash,
+    });
     await market.waitForDeployment();
     const marketAddr = await market.getAddress();
 

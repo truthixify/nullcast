@@ -57,7 +57,7 @@ describe("NullCastFactory", function () {
 
       const tx = await factory
         .connect(alice)
-        .createMarket("Will BTC hit $100k?", currentBlock + 1000, 1_000_000, 0);
+        .createMarket("Will BTC hit $100k?", currentBlock + 1000, 1_000_000, 0, ethers.encodeBytes32String("CRYPTO"));
       const receipt = await tx.wait();
 
       expect(await factory.marketCount()).to.equal(1);
@@ -74,7 +74,7 @@ describe("NullCastFactory", function () {
       const currentBlock = await ethers.provider.getBlockNumber();
 
       await expect(
-        factory.connect(alice).createMarket("ETH above $5k?", currentBlock + 500, 1_000_000, 0)
+        factory.connect(alice).createMarket("ETH above $5k?", currentBlock + 500, 1_000_000, 0, ethers.encodeBytes32String("CRYPTO"))
       ).to.emit(factory, "MarketCreated");
     });
 
@@ -82,8 +82,8 @@ describe("NullCastFactory", function () {
       const { factory, alice, bob } = await deployFactory();
       const currentBlock = await ethers.provider.getBlockNumber();
 
-      await factory.connect(alice).createMarket("Market A", currentBlock + 1000, 1_000_000, 0);
-      await factory.connect(bob).createMarket("Market B", currentBlock + 2000, 2_000_000, 0);
+      await factory.connect(alice).createMarket("Market A", currentBlock + 1000, 1_000_000, 0, ethers.encodeBytes32String("CRYPTO"));
+      await factory.connect(bob).createMarket("Market B", currentBlock + 2000, 2_000_000, 0, ethers.encodeBytes32String("SPORTS"));
 
       expect(await factory.marketCount()).to.equal(2);
       expect(await factory.getMarket(0)).to.not.equal(ethers.ZeroAddress);
@@ -96,7 +96,7 @@ describe("NullCastFactory", function () {
       const currentBlock = await ethers.provider.getBlockNumber();
 
       await expect(
-        factory.connect(alice).createMarket("", currentBlock + 1000, 1_000_000, 0)
+        factory.connect(alice).createMarket("", currentBlock + 1000, 1_000_000, 0, ethers.ZeroHash)
       ).to.be.revertedWithCustomError(factory, "EmptyQuestion");
     });
 
@@ -104,7 +104,7 @@ describe("NullCastFactory", function () {
       const { factory, alice } = await deployFactory();
 
       await expect(
-        factory.connect(alice).createMarket("Too late?", 1, 1_000_000, 0)
+        factory.connect(alice).createMarket("Too late?", 1, 1_000_000, 0, ethers.ZeroHash)
       ).to.be.revertedWithCustomError(factory, "ExpiryInPast");
     });
 
@@ -114,7 +114,7 @@ describe("NullCastFactory", function () {
       const currentBlock = await ethers.provider.getBlockNumber();
 
       await expect(
-        factory.connect(alice).createMarket("Paused?", currentBlock + 1000, 1_000_000, 0)
+        factory.connect(alice).createMarket("Paused?", currentBlock + 1000, 1_000_000, 0, ethers.ZeroHash)
       ).to.be.revertedWithCustomError(factory, "EnforcedPause");
     });
 
@@ -122,7 +122,7 @@ describe("NullCastFactory", function () {
       const { factory, cUSDT, oracle, alice } = await deployFactory();
       const currentBlock = await ethers.provider.getBlockNumber();
 
-      await factory.connect(alice).createMarket("Functional?", currentBlock + 1000, 1_000_000, 0);
+      await factory.connect(alice).createMarket("Functional?", currentBlock + 1000, 1_000_000, 0, ethers.encodeBytes32String("CRYPTO"));
       const marketAddr = await factory.getMarket(0);
 
       const NullCastMarket = await ethers.getContractFactory("NullCastMarket");
@@ -138,7 +138,7 @@ describe("NullCastFactory", function () {
       const { factory, alice } = await deployFactory();
       const currentBlock = await ethers.provider.getBlockNumber();
 
-      await factory.connect(alice).createMarket("Pool test?", currentBlock + 1000, 1_000_000, 0);
+      await factory.connect(alice).createMarket("Pool test?", currentBlock + 1000, 1_000_000, 0, ethers.encodeBytes32String("CRYPTO"));
 
       const poolAddr = await factory.getLiquidityPool(0);
       expect(poolAddr).to.not.equal(ethers.ZeroAddress);
@@ -161,7 +161,7 @@ describe("NullCastFactory", function () {
       const currentBlock = await ethers.provider.getBlockNumber();
 
       await expect(
-        factory.connect(alice).createMarket("LP event?", currentBlock + 1000, 1_000_000, 0)
+        factory.connect(alice).createMarket("LP event?", currentBlock + 1000, 1_000_000, 0, ethers.encodeBytes32String("CRYPTO"))
       ).to.emit(factory, "LiquidityPoolCreated");
     });
   });

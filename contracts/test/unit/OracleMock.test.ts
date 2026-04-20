@@ -16,17 +16,18 @@ describe("OracleMock", function () {
 
     const currentBlock = await ethers.provider.getBlockNumber();
     const NullCastMarket = await ethers.getContractFactory("NullCastMarket");
-    const market = await NullCastMarket.deploy(
-      0,
-      "Test market",
-      currentBlock + 5,
-      1_000_000,
-      await oracle.getAddress(), // oracle is the resolver
-      owner.address,
-      await cUSDT.getAddress(),
-      0, // binary market
-      ethers.ZeroAddress // no reputation gate
-    );
+    const market = await NullCastMarket.deploy({
+      marketId: 0,
+      question: "Test market",
+      expiryBlock: currentBlock + 5,
+      minimumBet: 1_000_000,
+      oracle: await oracle.getAddress(),
+      owner: owner.address,
+      cUSDT: await cUSDT.getAddress(),
+      bucketCount: 0,
+      reputationGate: ethers.ZeroAddress,
+      category: ethers.ZeroHash,
+    });
     await market.waitForDeployment();
 
     return { oracle, market, cUSDT, owner, alice };

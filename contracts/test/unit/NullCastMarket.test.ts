@@ -24,19 +24,20 @@ describe("NullCastMarket", function () {
     const expiryBlock = overrides?.expiryBlock ?? currentBlock + 1000;
     const minimumBet = overrides?.minimumBet ?? 1_000_000; // 1 cUSDT (6 decimals)
 
-    // Deploy market
+    // Deploy market using MarketParams struct
     const NullCastMarket = await ethers.getContractFactory("NullCastMarket");
-    const marketContract = await NullCastMarket.deploy(
-      1, // marketId
-      "Will BTC be above $90k on May 10, 2026?",
-      expiryBlock,
-      minimumBet,
-      oracle.address,
-      owner.address,
-      await cUSDT.getAddress(),
-      0, // binary market
-      ethers.ZeroAddress // no reputation gate
-    );
+    const marketContract = await NullCastMarket.deploy({
+      marketId: 1,
+      question: "Will BTC be above $90k on May 10, 2026?",
+      expiryBlock: expiryBlock,
+      minimumBet: minimumBet,
+      oracle: oracle.address,
+      owner: owner.address,
+      cUSDT: await cUSDT.getAddress(),
+      bucketCount: 0,
+      reputationGate: ethers.ZeroAddress,
+      category: ethers.encodeBytes32String("CRYPTO"),
+    });
     await marketContract.waitForDeployment();
 
     // Mint cUSDT to test users
@@ -98,6 +99,13 @@ describe("NullCastMarket", function () {
       expect(noOdds).to.equal(50);
     });
 
+    it("should store category correctly", async function () {
+      const m = await deployMarket();
+      expect(await m.market.category()).to.equal(
+        ethers.encodeBytes32String("CRYPTO")
+      );
+    });
+
     it("should revert with ZeroAddress if oracle is zero", async function () {
       const [owner] = await ethers.getSigners();
       const MockcUSDT = await ethers.getContractFactory("MockcUSDT");
@@ -105,17 +113,18 @@ describe("NullCastMarket", function () {
 
       const NullCastMarket = await ethers.getContractFactory("NullCastMarket");
       await expect(
-        NullCastMarket.deploy(
-          1,
-          "Test",
-          99999,
-          1000000,
-          ethers.ZeroAddress,
-          owner.address,
-          await cUSDT.getAddress(),
-          0,
-          ethers.ZeroAddress
-        )
+        NullCastMarket.deploy({
+          marketId: 1,
+          question: "Test",
+          expiryBlock: 99999,
+          minimumBet: 1000000,
+          oracle: ethers.ZeroAddress,
+          owner: owner.address,
+          cUSDT: await cUSDT.getAddress(),
+          bucketCount: 0,
+          reputationGate: ethers.ZeroAddress,
+          category: ethers.ZeroHash,
+        })
       ).to.be.revertedWithCustomError(NullCastMarket, "ZeroAddress");
     });
 
@@ -126,17 +135,18 @@ describe("NullCastMarket", function () {
 
       const NullCastMarket = await ethers.getContractFactory("NullCastMarket");
       await expect(
-        NullCastMarket.deploy(
-          1,
-          "Test",
-          99999,
-          1000000,
-          oracle.address,
-          ethers.ZeroAddress,
-          await cUSDT.getAddress(),
-          0,
-          ethers.ZeroAddress
-        )
+        NullCastMarket.deploy({
+          marketId: 1,
+          question: "Test",
+          expiryBlock: 99999,
+          minimumBet: 1000000,
+          oracle: oracle.address,
+          owner: ethers.ZeroAddress,
+          cUSDT: await cUSDT.getAddress(),
+          bucketCount: 0,
+          reputationGate: ethers.ZeroAddress,
+          category: ethers.ZeroHash,
+        })
       ).to.be.revertedWithCustomError(NullCastMarket, "ZeroAddress");
     });
 
@@ -144,17 +154,18 @@ describe("NullCastMarket", function () {
       const [owner, oracle] = await ethers.getSigners();
       const NullCastMarket = await ethers.getContractFactory("NullCastMarket");
       await expect(
-        NullCastMarket.deploy(
-          1,
-          "Test",
-          99999,
-          1000000,
-          oracle.address,
-          owner.address,
-          ethers.ZeroAddress,
-          0,
-          ethers.ZeroAddress
-        )
+        NullCastMarket.deploy({
+          marketId: 1,
+          question: "Test",
+          expiryBlock: 99999,
+          minimumBet: 1000000,
+          oracle: oracle.address,
+          owner: owner.address,
+          cUSDT: ethers.ZeroAddress,
+          bucketCount: 0,
+          reputationGate: ethers.ZeroAddress,
+          category: ethers.ZeroHash,
+        })
       ).to.be.revertedWithCustomError(NullCastMarket, "ZeroAddress");
     });
   });
@@ -470,6 +481,9 @@ describe("NullCastMarket", function () {
       await hre.network.provider.send("hardhat_mine", ["0x20"]);
       await m.market.connect(m.oracle).resolveMarket(outcome);
 
+      // Mine past dispute window (7200 blocks) so claimWinnings can be called
+      await hre.network.provider.send("hardhat_mine", ["0x1C21"]);
+
       return m;
     }
 
@@ -629,6 +643,142 @@ describe("NullCastMarket", function () {
 
       expect(await m.market.hasPosition(m.alice.address)).to.be.true;
       expect(await m.market.hasPosition(m.bob.address)).to.be.false;
+    });
+  });
+
+  // ── Dispute Tests ──────────────────────────────────────────────────────
+
+  describe("Dispute", function () {
+    async function setupResolvedForDispute() {
+      const currentBlock = await ethers.provider.getBlockNumber();
+      const m = await deployMarket({ expiryBlock: currentBlock + 20 });
+
+      // Alice bets 100 cUSDT YES
+      const enc1 = await hre.fhevm.encryptUint(
+        EUINT64,
+        100_000_000,
+        m.marketAddress,
+        m.alice.address
+      );
+      await m.market
+        .connect(m.alice)
+        .placeBet(enc1.externalEuint, enc1.inputProof, true);
+
+      // Bob bets 50 cUSDT NO
+      const enc2 = await hre.fhevm.encryptUint(
+        EUINT64,
+        50_000_000,
+        m.marketAddress,
+        m.bob.address
+      );
+      await m.market
+        .connect(m.bob)
+        .placeBet(enc2.externalEuint, enc2.inputProof, false);
+
+      // Mine past expiry and resolve
+      await hre.network.provider.send("hardhat_mine", ["0x20"]);
+      await m.market.connect(m.oracle).resolveMarket(1);
+
+      return m;
+    }
+
+    it("should return correct DISPUTE_WINDOW constant", async function () {
+      const m = await deployMarket();
+      expect(await m.market.DISPUTE_WINDOW()).to.equal(7200);
+    });
+
+    it("should return correct DISPUTE_BOND constant", async function () {
+      const m = await deployMarket();
+      expect(await m.market.DISPUTE_BOND()).to.equal(100_000_000);
+    });
+
+    it("should allow raising a dispute within window", async function () {
+      const m = await setupResolvedForDispute();
+
+      await expect(m.market.connect(m.charlie).raiseDispute())
+        .to.emit(m.market, "DisputeRaised")
+        .withArgs(1, m.charlie.address, 100_000_000);
+
+      expect(await m.market.disputed()).to.be.true;
+      expect(await m.market.disputer()).to.equal(m.charlie.address);
+    });
+
+    it("should revert raiseDispute if market not resolved", async function () {
+      const m = await deployMarket();
+
+      await expect(
+        m.market.connect(m.alice).raiseDispute()
+      ).to.be.revertedWithCustomError(m.market, "MarketNotResolved");
+    });
+
+    it("should revert raiseDispute after dispute window closes", async function () {
+      const m = await setupResolvedForDispute();
+
+      // Mine past dispute window (7200 blocks)
+      await hre.network.provider.send("hardhat_mine", ["0x1C21"]);
+
+      await expect(
+        m.market.connect(m.charlie).raiseDispute()
+      ).to.be.revertedWithCustomError(m.market, "DisputeWindowClosed");
+    });
+
+    it("should revert raiseDispute if already disputed", async function () {
+      const m = await setupResolvedForDispute();
+      await m.market.connect(m.charlie).raiseDispute();
+
+      await expect(
+        m.market.connect(m.alice).raiseDispute()
+      ).to.be.revertedWithCustomError(m.market, "DisputeAlreadyRaised");
+    });
+
+    it("should allow owner to resolve dispute (upheld)", async function () {
+      const m = await setupResolvedForDispute();
+      await m.market.connect(m.charlie).raiseDispute();
+
+      await expect(m.market.connect(m.owner).resolveDispute(true, 0))
+        .to.emit(m.market, "DisputeResolved")
+        .withArgs(1, true, 0);
+
+      expect(await m.market.disputed()).to.be.false;
+      expect(await m.market.resolvedOutcome()).to.equal(0);
+    });
+
+    it("should allow owner to resolve dispute (rejected)", async function () {
+      const m = await setupResolvedForDispute();
+      await m.market.connect(m.charlie).raiseDispute();
+
+      await expect(m.market.connect(m.owner).resolveDispute(false, 0))
+        .to.emit(m.market, "DisputeResolved")
+        .withArgs(1, false, 1);
+
+      expect(await m.market.disputed()).to.be.false;
+      expect(await m.market.resolvedOutcome()).to.equal(1); // unchanged
+    });
+
+    it("should revert resolveDispute if not disputed", async function () {
+      const m = await setupResolvedForDispute();
+
+      await expect(
+        m.market.connect(m.owner).resolveDispute(true, 0)
+      ).to.be.revertedWithCustomError(m.market, "NotDisputed");
+    });
+
+    it("should revert resolveDispute from non-owner", async function () {
+      const m = await setupResolvedForDispute();
+      await m.market.connect(m.charlie).raiseDispute();
+
+      await expect(
+        m.market.connect(m.alice).resolveDispute(true, 0)
+      ).to.be.revertedWithCustomError(m.market, "OnlyOwner");
+    });
+
+    it("should revert claimWinnings during dispute window", async function () {
+      const m = await setupResolvedForDispute();
+
+      // Market is resolved but we're still in the dispute window
+      await expect(
+        m.market.connect(m.alice).claimWinnings()
+      ).to.be.revertedWithCustomError(m.market, "DisputeWindowActive");
     });
   });
 });

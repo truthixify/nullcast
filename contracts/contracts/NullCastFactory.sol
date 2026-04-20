@@ -72,13 +72,15 @@ contract NullCastFactory is Ownable, Pausable {
      * @param expiryBlock Block number after which no new bets are accepted
      * @param minimumBet Minimum bet amount in cUSDT base units (6 decimals)
      * @param _bucketCount Number of buckets for scalar markets (0 = binary)
+     * @param _category Market category tag (e.g. keccak256("CRYPTO"))
      * @return marketAddress Address of the newly deployed market
      */
     function createMarket(
         string calldata question,
         uint256 expiryBlock,
         uint256 minimumBet,
-        uint8 _bucketCount
+        uint8 _bucketCount,
+        bytes32 _category
     ) external whenNotPaused returns (address marketAddress) {
         if (bytes(question).length == 0) revert EmptyQuestion();
         if (expiryBlock <= block.number) revert ExpiryInPast();
@@ -89,15 +91,18 @@ contract NullCastFactory is Ownable, Pausable {
         bytes32 salt = keccak256(abi.encodePacked(newMarketId, msg.sender, block.number));
 
         NullCastMarket market = new NullCastMarket{salt: salt}(
-            newMarketId,
-            question,
-            expiryBlock,
-            minimumBet,
-            oracleAddress,
-            owner(),
-            cUSDT,
-            _bucketCount,
-            reputationGate
+            NullCastMarket.MarketParams({
+                marketId: newMarketId,
+                question: question,
+                expiryBlock: expiryBlock,
+                minimumBet: minimumBet,
+                oracle: oracleAddress,
+                owner: owner(),
+                cUSDT: cUSDT,
+                bucketCount: _bucketCount,
+                reputationGate: reputationGate,
+                category: _category
+            })
         );
 
         marketAddress = address(market);

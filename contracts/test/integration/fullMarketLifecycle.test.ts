@@ -33,7 +33,8 @@ describe("Full Market Lifecycle Integration", function () {
       "Will BTC be above $90k on May 10?",
       expiryBlock,
       1_000_000,
-      0
+      0,
+      ethers.encodeBytes32String("CRYPTO")
     );
 
     const marketAddr = await factory.getMarket(0);
@@ -107,6 +108,9 @@ describe("Full Market Lifecycle Integration", function () {
 
     // ── 7. Winners claim ──────────────────────────────────────────
 
+    // Mine past dispute window (7200 blocks) so claimWinnings can be called
+    await hre.network.provider.send("hardhat_mine", ["0x1C21"]);
+
     // Alice (YES winner) claims
     await expect(market.connect(alice).claimWinnings())
       .to.emit(market, "WinningsClaimed")
@@ -163,7 +167,7 @@ describe("Full Market Lifecycle Integration", function () {
     await factory.waitForDeployment();
 
     const currentBlock = await ethers.provider.getBlockNumber();
-    await factory.connect(alice).createMarket("ETH above $5k?", currentBlock + 20, 1_000_000, 0);
+    await factory.connect(alice).createMarket("ETH above $5k?", currentBlock + 20, 1_000_000, 0, ethers.encodeBytes32String("CRYPTO"));
 
     const marketAddr = await factory.getMarket(0);
     const NullCastMarket = await ethers.getContractFactory("NullCastMarket");
@@ -201,6 +205,9 @@ describe("Full Market Lifecycle Integration", function () {
     // Resolve NO (outcome = 0)
     await hre.network.provider.send("hardhat_mine", ["0x20"]);
     await oracle.connect(owner).submitResolution(0, 0, 4500);
+
+    // Mine past dispute window (7200 blocks) so claimWinnings can be called
+    await hre.network.provider.send("hardhat_mine", ["0x1C21"]);
 
     // Bob (NO) wins
     await market.connect(bob).claimWinnings();
