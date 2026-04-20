@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useAccount, useReadContract, useSignTypedData } from "wagmi";
 import { getMarketConfig } from "@/lib/contracts";
 import { getRelayer } from "@/lib/fhevm";
@@ -27,20 +27,36 @@ export function useUserDecrypt(marketAddress: `0x${string}`) {
   const [yesAmount, setYesAmount] = useState<bigint | null>(null);
   const [noAmount, setNoAmount] = useState<bigint | null>(null);
 
-  // Read encrypted handles from contract
+  // Read encrypted handles from contract (refetch every 10s to catch new bets)
   const { data: yesHandle } = useReadContract({
     ...config,
     functionName: "getUserYesPosition",
     args: userAddress ? [userAddress] : undefined,
-    query: { enabled: !!userAddress },
+    query: { enabled: !!userAddress, refetchInterval: 10_000 },
   });
 
   const { data: noHandle } = useReadContract({
     ...config,
     functionName: "getUserNoPosition",
     args: userAddress ? [userAddress] : undefined,
-    query: { enabled: !!userAddress },
+    query: { enabled: !!userAddress, refetchInterval: 10_000 },
   });
+
+  // Reset decrypted values when handles change (new bet placed → new ciphertext)
+  const prevYesHandle = useRef(yesHandle);
+  const prevNoHandle = useRef(noHandle);
+  useEffect(() => {
+    if (prevYesHandle.current && yesHandle && prevYesHandle.current !== yesHandle) {
+      setYesAmount(null);
+    }
+    prevYesHandle.current = yesHandle;
+  }, [yesHandle]);
+  useEffect(() => {
+    if (prevNoHandle.current && noHandle && prevNoHandle.current !== noHandle) {
+      setNoAmount(null);
+    }
+    prevNoHandle.current = noHandle;
+  }, [noHandle]);
 
   const isZero = (h: unknown) => {
     if (!h) return true;
@@ -138,9 +154,6 @@ export function useUserDecrypt(marketAddress: `0x${string}`) {
     yesHandle, noHandle, signTypedDataAsync, setDecryptedValue,
   ]);
 
-  // Check localStorage for previously decrypted values
-  const cachedYes = useNullCastStore((s) => s.decryptedValues[`${marketAddress}-yes`]);
-  const cachedNo = useNullCastStore((s) => s.decryptedValues[`${marketAddress}-no`]);
   const invalidate = useNullCastStore((s) => s.invalidateDecryptedValues);
 
   const refresh = useCallback(async () => {
@@ -151,19 +164,17 @@ export function useUserDecrypt(marketAddress: `0x${string}`) {
     await decrypt();
   }, [invalidate, marketAddress, decrypt]);
 
-  const effectiveYes = yesAmount ?? (cachedYes ? BigInt(cachedYes) : null);
-  const effectiveNo = noAmount ?? (cachedNo ? BigInt(cachedNo) : null);
-
   return {
-    decrypt: refresh, // Always do fresh decrypt (clears cache + re-signs)
+    decrypt: refresh, // Always clears cache + requests fresh signature
     refresh,
     isDecrypting,
     error,
     hasYesPosition,
     hasNoPosition,
-    yesAmount: effectiveYes,
-    noAmount: effectiveNo,
-    isDecrypted: effectiveYes !== null || effectiveNo !== null,
-    isCached: !!(cachedYes || cachedNo) && yesAmount === null && noAmount === null,
+    // Only show values from the current session decrypt — never cached
+    yesAmount,
+    noAmount,
+    isDecrypted: yesAmount !== null || noAmount !== null,
+    isCached: false,
   };
 }
