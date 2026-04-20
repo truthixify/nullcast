@@ -17,6 +17,13 @@ const RELAYER_URL = "https://relayer.testnet.zama.org/v2";
 const factoryAbi = parseAbi([
   "function getMarketCount() view returns (uint256)",
   "function getLiquidityPool(uint256 marketId) view returns (address)",
+  "function marketById(uint256) view returns (address)",
+]);
+
+const marketAbi = parseAbi([
+  "function getTotalYesPoolHandle() view returns (bytes32)",
+  "function getTotalNoPoolHandle() view returns (bytes32)",
+  "function submitOddsUpdate(uint256 clearYes, uint256 clearNo, bytes decryptionProof)",
 ]);
 
 const vaultFactoryAbi = parseAbi([
@@ -125,6 +132,7 @@ export async function GET() {
   });
 
   const results: Array<{ marketId: number; pool: string; action: string }> = [];
+  const oddsResults: Array<{ marketId: number; action: string }> = [];
 
   try {
     const marketCount = await publicClient.readContract({
@@ -133,6 +141,48 @@ export async function GET() {
       functionName: "getMarketCount",
     });
 
+    // ── Update market odds ──────────────────────────────────────
+    for (let i = 0; i < Number(marketCount); i++) {
+      try {
+        const marketAddr = (await publicClient.readContract({
+          address: CONTRACT_ADDRESSES.NullCastFactory as `0x${string}`,
+          abi: factoryAbi,
+          functionName: "marketById",
+          args: [BigInt(i)],
+        })) as `0x${string}`;
+
+        if (!marketAddr || marketAddr === "0x0000000000000000000000000000000000000000") continue;
+
+        const yesHandle = (await publicClient.readContract({ address: marketAddr, abi: marketAbi, functionName: "getTotalYesPoolHandle" })) as `0x${string}`;
+        const noHandle = (await publicClient.readContract({ address: marketAddr, abi: marketAbi, functionName: "getTotalNoPoolHandle" })) as `0x${string}`;
+
+        if (yesHandle === ZERO_HANDLE || noHandle === ZERO_HANDLE) {
+          oddsResults.push({ marketId: i, action: "no bets" });
+          continue;
+        }
+
+        const clearYes = await publicDecryptViaRelayer(yesHandle);
+        const clearNo = await publicDecryptViaRelayer(noHandle);
+
+        if (clearYes === null || clearNo === null) {
+          oddsResults.push({ marketId: i, action: "decrypt failed" });
+          continue;
+        }
+
+        const txHash = await walletClient.writeContract({
+          address: marketAddr,
+          abi: marketAbi,
+          functionName: "submitOddsUpdate",
+          args: [clearYes, clearNo, "0x"],
+        });
+        await publicClient.waitForTransactionReceipt({ hash: txHash });
+        oddsResults.push({ marketId: i, action: `YES=${Number(clearYes)/1e6} NO=${Number(clearNo)/1e6}` });
+      } catch (err) {
+        oddsResults.push({ marketId: i, action: `error: ${err instanceof Error ? err.message.slice(0, 60) : "unknown"}` });
+      }
+    }
+
+    // ── Update LP pool totals ───────────────────────────────────
     for (let i = 0; i < Number(marketCount); i++) {
       const poolAddr = (await publicClient.readContract({
         address: CONTRACT_ADDRESSES.NullCastFactory as `0x${string}`,
@@ -310,6 +360,7 @@ export async function GET() {
       ok: true,
       timestamp: new Date().toISOString(),
       updated: totalUpdated,
+      odds: oddsResults,
       pools: results,
       vaults: vaultResults,
     });

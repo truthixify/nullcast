@@ -961,12 +961,24 @@ hr.divider { border: 0; margin: 0; }
     font-size: 20px !important;
   }
 
-  /* Activity feed: simpler on mobile */
+  /* Activity feed: full width on mobile */
+  .market-detail-activity {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .market-detail-activity > div {
+    margin-top: 24px !important;
+  }
   .market-detail-page [style*="grid-template-columns: 12px"] {
-    grid-template-columns: 12px 1fr auto !important;
-    gap: 8px !important;
+    grid-template-columns: 12px 1fr !important;
+    gap: 6px !important;
     padding: 8px 12px !important;
     font-size: 11px !important;
+  }
+
+  /* Amount input: add padding to cUSDT label */
+  .market-detail-page input[style*="fontSize: 24"] {
+    padding-right: 60px !important;
   }
 
   .ticker-track { animation-duration: 30s; }
