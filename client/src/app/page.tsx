@@ -2,10 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { FHEBadge, LockIcon } from "@/components/shared/Icons";
+import { FHEBadge, LockIcon, NullCastMark } from "@/components/shared/Icons";
 import { OddsBar } from "@/components/shared/OddsBar";
 import { Header } from "@/components/shared/Header";
-import { Footer } from "@/components/shared/Footer";
 
 /* ── LiveMarketCard ────────────────────────────────────────── */
 function LiveMarketCard() {
@@ -177,7 +176,26 @@ export default function LandingPage() {
         </div>
       </section>
       </main>
-      <Footer />
+      <footer className="site-footer">
+        <div className="container row between">
+          <div className="row" style={{ color: "var(--ink-3)" }}>
+            <span className="brand" style={{ fontSize: 13, color: "var(--ink-3)" }}>
+              <span style={{ color: "var(--ink-3)" }}>
+                <NullCastMark />
+              </span>{" "}
+              NullCast
+            </span>
+          </div>
+          <div className="row">
+            <a className="link" href="#">
+              GitHub
+            </a>
+            <span className="pill enc">
+              <LockIcon size={10} /> Built on Zama fhEVM
+            </span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

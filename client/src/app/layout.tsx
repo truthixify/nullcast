@@ -1,27 +1,26 @@
 import type { Metadata } from "next";
-import { Syne, DM_Sans, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
+import { Cormorant_Garamond, JetBrains_Mono } from "next/font/google";
 import "@rainbow-me/rainbowkit/styles.css";
 import "../styles/design.css";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
-const syne = Syne({
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
-  variable: "--font-syne",
-  display: "swap",
+const geist = localFont({
+  src: "./fonts/GeistVF.woff",
+  variable: "--font-geist",
 });
 
-const dmSans = DM_Sans({
+const cormorant = Cormorant_Garamond({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
-  variable: "--font-dm-sans",
+  variable: "--font-cormorant",
   display: "swap",
 });
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  weight: ["400", "500"],
+  weight: ["400", "500", "600"],
   variable: "--font-jetbrains-mono",
   display: "swap",
 });
@@ -53,7 +52,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${syne.variable} ${dmSans.variable} ${jetbrainsMono.variable} antialiased`}
+        className={`${geist.variable} ${cormorant.variable} ${jetbrainsMono.variable} antialiased`}
       >
         <Providers>{children}</Providers>
       </body>

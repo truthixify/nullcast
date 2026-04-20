@@ -3,18 +3,133 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { BrandMark, FHEBadge } from "./Icons";
+import { NullCastMark, Icon, FHEBadge } from "./Icons";
+import { PulseDot } from "./PulseDot";
 
 const navItems = [
-  { href: "/markets", label: "Markets" },
-  { href: "/portfolio", label: "Portfolio" },
-  { href: "/liquidity", label: "Liquidity" },
-  { href: "/vaults", label: "Vaults" },
-  { href: "/reputation", label: "Score" },
+  { href: "/", label: "Home", icon: "home" },
+  { href: "/markets", label: "Markets", icon: "markets" },
+  { href: "/portfolio", label: "Portfolio", icon: "portfolio" },
+  { href: "/vaults", label: "Vaults", icon: "vaults" },
+  { href: "/reputation", label: "Score", icon: "score" },
+  { href: "/liquidity", label: "Liquidity", icon: "liquidity" },
 ];
 
+/* ── Sidebar (desktop) ────────────────────────────────────────── */
+export function Sidebar() {
+  const path = usePathname();
+
+  const isActive = (href: string) => {
+    if (href === "/") return path === "/";
+    return path?.startsWith(href) ?? false;
+  };
+
+  return (
+    <aside className="left-nav">
+      {/* Logo */}
+      <div className="brand-area">
+        <NullCastMark />
+        <span className="brand-text">NullCast</span>
+      </div>
+
+      {/* Nav items */}
+      <nav>
+        {navItems.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={isActive(item.href) ? "active" : ""}
+          >
+            <Icon name={item.icon} size={15} />
+            <span>{item.label}</span>
+          </Link>
+        ))}
+      </nav>
+
+      <div style={{ flex: 1 }} />
+
+      {/* Search hint */}
+      <div className="search-trigger">
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <Icon name="search" size={12} /> Search
+        </span>
+        <span className="kbd">&#8984;K</span>
+      </div>
+
+      {/* Account chip */}
+      <div className="account-chip">
+        <ConnectButton />
+      </div>
+    </aside>
+  );
+}
+
+/* ── TopBar (across top of main content) ──────────────────────── */
+export function TopBar() {
+  return (
+    <div className="top-bar">
+      <button className="top-bar-search" type="button">
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Icon name="search" size={12} /> Search markets, addresses...
+        </span>
+        <span className="kbd">&#8984;K</span>
+      </button>
+      <span
+        className="mono"
+        style={{
+          fontSize: 11,
+          color: "var(--ink-2)",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <PulseDot color="var(--yes)" />
+        <span>Sepolia</span>
+      </span>
+    </div>
+  );
+}
+
+/* ── MobileNav (bottom tab bar) ───────────────────────────────── */
+export function MobileNav() {
+  const path = usePathname();
+
+  const mobileItems = [
+    { href: "/markets", label: "Markets", icon: "markets" },
+    { href: "/portfolio", label: "Portfolio", icon: "portfolio" },
+    { href: "/vaults", label: "Vaults", icon: "vaults" },
+    { href: "/reputation", label: "Score", icon: "score" },
+    { href: "/liquidity", label: "Liquidity", icon: "liquidity" },
+  ];
+
+  return (
+    <nav className="mobile-nav">
+      {mobileItems.map((item) => (
+        <Link
+          key={item.href}
+          href={item.href}
+          className={path?.startsWith(item.href) ? "active" : ""}
+        >
+          <Icon name={item.icon} size={18} />
+          {item.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+/* ── Legacy Header (for landing page and backward compat) ─────── */
 export function Header() {
   const path = usePathname();
+
+  const headerNavItems = [
+    { href: "/markets", label: "Markets" },
+    { href: "/portfolio", label: "Portfolio" },
+    { href: "/liquidity", label: "Liquidity" },
+    { href: "/vaults", label: "Vaults" },
+    { href: "/reputation", label: "Score" },
+  ];
 
   return (
     <>
@@ -22,13 +137,13 @@ export function Header() {
       <header className="site-header">
         <div className="container row">
           <Link href="/" className="brand">
-            <span className="mark" style={{ color: "var(--acc)" }}>
-              <BrandMark />
+            <span className="mark" style={{ color: "var(--gold)" }}>
+              <NullCastMark />
             </span>
             <span>NullCast</span>
           </Link>
           <nav className="nav">
-            {navItems.map((n) => (
+            {headerNavItems.map((n) => (
               <Link
                 key={n.href}
                 href={n.href}
@@ -46,9 +161,9 @@ export function Header() {
         </div>
       </header>
 
-      {/* Mobile bottom tab bar — hidden on desktop via CSS */}
+      {/* Mobile bottom tab bar */}
       <nav className="mobile-nav" style={{ display: "none" }}>
-        {navItems.map((n) => (
+        {headerNavItems.map((n) => (
           <Link
             key={n.href}
             href={n.href}

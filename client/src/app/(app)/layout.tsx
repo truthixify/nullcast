@@ -1,15 +1,19 @@
 "use client";
 
 import { ReactNode } from "react";
-import { Header } from "@/components/shared/Header";
-import { Footer } from "@/components/shared/Footer";
+import { Sidebar, TopBar, MobileNav } from "@/components/shared/Header";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      <Header />
-      <main style={{ flex: 1 }}>{children}</main>
-      <Footer />
-    </div>
+    <>
+      <div style={{ display: "flex", minHeight: "100vh" }}>
+        <Sidebar />
+        <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+          <TopBar />
+          <div style={{ flex: 1 }}>{children}</div>
+        </main>
+      </div>
+      <MobileNav />
+    </>
   );
 }

@@ -10,13 +10,17 @@ interface Props {
   unit?: string;
 }
 
+/**
+ * EncryptedValue — backward-compatible wrapper.
+ * New code should prefer CipherReveal for the slot-machine effect.
+ */
 export function EncryptedValue({ state, value, onDecrypt, compact, unit = "cUSDT" }: Props) {
   if (state === "revealed")
     return (
       <span className="enc-val">
         <span className="reveal num">{value}</span>
         {unit && !compact && (
-          <span style={{ color: "var(--t-3)", fontFamily: "var(--f-mono)" }}>{unit}</span>
+          <span style={{ color: "var(--ink-3)", fontFamily: "var(--f-mono)" }}>{unit}</span>
         )}
       </span>
     );
@@ -24,7 +28,7 @@ export function EncryptedValue({ state, value, onDecrypt, compact, unit = "cUSDT
   if (state === "decrypting")
     return (
       <span className="enc-val">
-        <LockIcon size={11} /> <span className="shimmer mono">decrypting...</span>
+        <LockIcon size={11} /> <span className="shimmer-text mono">decrypting...</span>
       </span>
     );
 

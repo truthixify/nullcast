@@ -1,101 +1,249 @@
-<!doctype html>
-<html lang="en" data-accent="amber">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>nullcast — confidential prediction markets</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css"/>
-</head>
-<body>
-  <div id="root"></div>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NullCast</title>
 
-  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-  <script type="text/babel" src="data.jsx"></script>
-  <script type="text/babel" src="components.jsx"></script>
-  <script type="text/babel" src="pages-1.jsx"></script>
-  <script type="text/babel" src="pages-2.jsx"></script>
-  <script type="text/babel" src="pages-3.jsx"></script>
+<style>
+  :root {
+    /* Surfaces */
+    --bg-0: #0C0B0A;
+    --bg-1: #141311;
+    --bg-2: #1A1815;
+    --bg-3: #221F1B;
 
-  <script>
-    // Tweakable defaults (persisted via host)
-    window.TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-      "accent": "amber"
-    }/*EDITMODE-END*/;
-  </script>
+    /* Text */
+    --ink-1: #E8E0D4;
+    --ink-2: #A89E90;
+    --ink-3: #6B6560;
+    --ink-4: #3D3A36;
 
-  <script type="text/babel">
-  const { useState, useEffect, useMemo } = React;
+    /* Accents */
+    --gold: #D4A843;
+    --gold-dim: #8A6F2C;
+    --gold-glow: rgba(212, 168, 67, 0.22);
 
-  function App() {
-    // route: { page: "landing"|"markets"|"detail"|"create"|"portfolio"|"reputation", id?: string }
-    const [route, setRoute] = useState(() => {
-      try {
-        const saved = JSON.parse(localStorage.getItem("nc:route") || "null");
-        return saved || { page: "landing" };
-      } catch { return { page: "landing" }; }
-    });
-    const [accent, setAccent] = useState(window.TWEAK_DEFAULTS.accent || "amber");
-    const [toasts, setToasts] = useState([]);
-    const [tweaksOn, setTweaksOn] = useState(false);
+    /* Sides */
+    --yes: #6B9B7A;
+    --yes-dim: #3F5B48;
+    --yes-glow: rgba(107, 155, 122, 0.18);
+    --no: #B86B6B;
+    --no-dim: #6B3F3F;
+    --no-glow: rgba(184, 107, 107, 0.18);
 
-    useEffect(() => { document.documentElement.setAttribute("data-accent", accent); }, [accent]);
-    useEffect(() => { localStorage.setItem("nc:route", JSON.stringify(route)); window.scrollTo({top:0}); }, [route]);
+    /* Privacy (transient only) */
+    --cipher: #7B7FBF;
 
-    const goto = (page, id) => setRoute({ page, id });
-    const pushToast = (msg, icon) => {
-      const id = Math.random().toString(36).slice(2);
-      setToasts(t => [...t, { id, msg, icon }]);
-      setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 2800);
-    };
+    /* Borders */
+    --line: rgba(255, 240, 220, 0.04);
+    --line-2: rgba(255, 240, 220, 0.08);
+    --line-hot: rgba(255, 240, 220, 0.16);
 
-    // Tweaks integration
-    useEffect(() => {
-      const onMsg = (e) => {
-        const d = e.data;
-        if (!d || !d.type) return;
-        if (d.type === "__activate_edit_mode") setTweaksOn(true);
-        if (d.type === "__deactivate_edit_mode") setTweaksOn(false);
-      };
-      window.addEventListener("message", onMsg);
-      window.parent.postMessage({ type: "__edit_mode_available" }, "*");
-      return () => window.removeEventListener("message", onMsg);
-    }, []);
-
-    const updateAccent = (a) => {
-      setAccent(a);
-      window.parent.postMessage({ type: "__edit_mode_set_keys", edits: { accent: a } }, "*");
-    };
-
-    const page = (() => {
-      switch(route.page) {
-        case "landing":    return <Landing goto={goto}/>;
-        case "markets":    return <MarketsList goto={goto}/>;
-        case "detail":     return <MarketDetail id={route.id} goto={goto} pushToast={pushToast}/>;
-        case "create":     return <CreateMarket goto={goto} pushToast={pushToast}/>;
-        case "portfolio":  return <Portfolio goto={goto} pushToast={pushToast}/>;
-        case "reputation": return <Reputation pushToast={pushToast}/>;
-        default:           return <Landing goto={goto}/>;
-      }
-    })();
-
-    return (
-      <div className="app">
-        <Header route={route} goto={goto}/>
-        {page}
-        <Footer/>
-        <Toasts toasts={toasts}/>
-        <TweaksPanel accent={accent} setAccent={updateAccent} visible={tweaksOn}/>
-      </div>
-    );
+    /* Fonts */
+    --f-display: 'Cormorant Garamond', 'Source Serif 4', Georgia, serif;
+    --f-body: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+    --f-mono: 'JetBrains Mono', ui-monospace, monospace;
   }
 
-  ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
-  </script>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--bg-0);
+    color: var(--ink-1);
+    font-family: var(--f-body);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  /* Warm-grain body ambience */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(1200px 700px at 80% -10%, rgba(212, 168, 67, 0.035), transparent 60%),
+      radial-gradient(800px 600px at -10% 110%, rgba(123, 127, 191, 0.025), transparent 60%);
+    z-index: 0;
+  }
+
+  #root { position: relative; z-index: 1; }
+
+  /* Tabular mono always */
+  .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; letter-spacing: -0.01em; }
+  .serif { font-family: var(--f-display); letter-spacing: -0.01em; }
+
+  /* Utility */
+  button { font-family: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+  input, textarea { font-family: inherit; color: inherit; background: none; border: none; outline: none; }
+  a { color: inherit; text-decoration: none; }
+
+  ::selection { background: var(--gold-glow); color: var(--ink-1); }
+
+  /* Scrollbars — almost invisible */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--line-hot); }
+
+  /* ===== Cursor-following border glow ===== */
+  .glow-card {
+    position: relative;
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    transition: border-color 240ms ease, background-color 240ms ease;
+    overflow: hidden;
+  }
+  .glow-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: radial-gradient(
+      260px circle at var(--mx, 50%) var(--my, 50%),
+      rgba(212, 168, 67, 0.28),
+      rgba(212, 168, 67, 0.05) 40%,
+      transparent 70%
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 280ms ease;
+    pointer-events: none;
+  }
+  .glow-card:hover::before { opacity: 1; }
+  .glow-card:hover { border-color: var(--line-hot); }
+
+  /* Odds bar transitions */
+  .odds-fill { transition: width 640ms cubic-bezier(0.22, 1, 0.36, 1); }
+
+  /* Pulse dot */
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.35; transform: scale(0.75); }
+  }
+  .pulse-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--gold);
+    box-shadow: 0 0 10px var(--gold-glow);
+    animation: pulse-dot 2.2s ease-in-out infinite;
+    display: inline-block;
+  }
+
+  /* Shimmer on success */
+  @keyframes shimmer {
+    0% { transform: translateX(-120%); }
+    100% { transform: translateX(120%); }
+  }
+  .shimmer {
+    position: relative; overflow: hidden;
+  }
+  .shimmer.fire::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(100deg, transparent 30%, rgba(212, 168, 67, 0.45), transparent 70%);
+    animation: shimmer 900ms ease-out 1;
+    pointer-events: none;
+  }
+
+  /* Ripple from bet placement */
+  @keyframes ripple {
+    0% { transform: scale(0); opacity: 0.6; }
+    100% { transform: scale(6); opacity: 0; }
+  }
+  .ripple-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; border-radius: inherit; }
+  .ripple-dot {
+    position: absolute;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    transform-origin: center;
+    animation: ripple 900ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* Slot-machine decrypt cells */
+  .cipher-cell {
+    font-family: var(--f-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-2);
+    letter-spacing: 0.02em;
+  }
+  .cipher-cell.revealing { color: var(--cipher); }
+  .cipher-cell.revealed { color: var(--ink-1); }
+
+  @keyframes gold-bloom {
+    0% { text-shadow: 0 0 0 rgba(212, 168, 67, 0); }
+    30% { text-shadow: 0 0 18px rgba(212, 168, 67, 0.55); }
+    100% { text-shadow: 0 0 0 rgba(212, 168, 67, 0); }
+  }
+  .bloom-gold { animation: gold-bloom 1200ms ease-out 1; }
+
+  /* Page fade-slide */
+  @keyframes page-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .page-in { animation: page-in 360ms cubic-bezier(0.22, 1, 0.36, 1); }
+
+  /* Ticker */
+  @keyframes ticker-flow {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  .ticker-track {
+    display: flex;
+    width: max-content;
+    animation: ticker-flow 60s linear infinite;
+  }
+
+  /* Command palette backdrop */
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes scale-in { from { opacity: 0; transform: translateY(-8px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+  .kbd {
+    font-family: var(--f-mono);
+    font-size: 10px;
+    padding: 2px 5px;
+    border: 1px solid var(--line-2);
+    border-radius: 3px;
+    color: var(--ink-2);
+    background: var(--bg-2);
+  }
+
+  /* Focus ring */
+  button:focus-visible, a:focus-visible, input:focus-visible {
+    outline: 1px solid var(--gold-dim);
+    outline-offset: 2px;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- React 18 + Babel -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="src/data.jsx"></script>
+<script type="text/babel" src="src/primitives.jsx"></script>
+<script type="text/babel" src="src/shell.jsx"></script>
+<script type="text/babel" src="src/page-landing.jsx"></script>
+<script type="text/babel" src="src/page-markets.jsx"></script>
+<script type="text/babel" src="src/page-detail.jsx"></script>
+<script type="text/babel" src="src/page-portfolio.jsx"></script>
+<script type="text/babel" src="src/page-vaults.jsx"></script>
+<script type="text/babel" src="src/page-score.jsx"></script>
+<script type="text/babel" src="src/page-liquidity.jsx"></script>
+<script type="text/babel" src="src/app.jsx"></script>
 </body>
 </html>
