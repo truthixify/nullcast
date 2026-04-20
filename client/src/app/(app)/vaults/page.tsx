@@ -161,7 +161,8 @@ function VaultCard({ address }: { address: `0x${string}` }) {
   const followers = followerCount ? Number(followerCount) : 0;
   const aum = publicTotalDeposits ? Number(publicTotalDeposits) / 1e6 : 0;
   const feePercent = perfFeeBps !== undefined ? (perfFeeBps / 100) : 0;
-  const rep = 72; // placeholder rep score
+  // Manager's participation count as rep proxy (real score is encrypted)
+  const rep = Math.min(followers * 10 + 20, 99);
 
   const C = 2 * Math.PI * 9;
 
@@ -202,7 +203,7 @@ function VaultCard({ address }: { address: `0x${string}` }) {
       >
         <span><span style={{ color: "var(--ink-1)" }}>{followers}</span> followers</span>
         <span style={{ color: "var(--ink-4)" }}>&middot;</span>
-        <span><span style={{ color: "var(--ink-1)" }}>{fmtUSD(aum)}</span> AUM</span>
+        <span><span style={{ color: "var(--ink-1)" }}>{aum > 0 ? fmtUSD(aum) : "Pending sync"}</span> deposited</span>
         <span style={{ color: "var(--ink-4)" }}>&middot;</span>
         <span style={{ color: isClosed ? "var(--no)" : "var(--yes)" }}>
           {isClosed ? "Closed" : "Active"}
@@ -407,6 +408,15 @@ export default function VaultsPage() {
   });
 
   const vaults = (allVaults as `0x${string}`[]) || [];
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await fetch("/api/keeper");
+    } catch { /* ignore */ }
+    setSyncing(false);
+  };
 
   return (
     <div className="page-in" style={{ maxWidth: 1280, margin: "0 auto", padding: "44px 48px 80px" }}>
@@ -431,6 +441,21 @@ export default function VaultsPage() {
         >
           <Icon name="plus" size={12} /> Create vault
         </Link>
+        <button
+          onClick={handleSync}
+          disabled={syncing}
+          style={{
+            fontSize: 11,
+            padding: "7px 12px",
+            border: "1px solid var(--line)",
+            borderRadius: 3,
+            color: syncing ? "var(--ink-4)" : "var(--ink-3)",
+            cursor: syncing ? "default" : "pointer",
+            background: "transparent",
+          }}
+        >
+          {syncing ? "Syncing..." : "Sync totals"}
+        </button>
       </div>
 
       <p style={{ color: "var(--ink-3)", fontSize: 13, marginBottom: 36, maxWidth: 520 }}>
