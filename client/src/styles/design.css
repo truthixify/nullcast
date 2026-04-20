@@ -544,6 +544,14 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   100% { box-shadow: 0 0 0 0 transparent; }
 }
 
+.pulse-text {
+  animation: pulse-text 1.4s ease-in-out infinite;
+}
+@keyframes pulse-text {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 /* ========================== cards ========================== */
 
 .card {

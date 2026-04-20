@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useAccount } from "wagmi";
 import { useFactoryMarkets } from "@/hooks/useFactory";
 import { useMarket, useHasPosition } from "@/hooks/useMarket";
@@ -25,27 +25,26 @@ function Stat({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-/* ── Single position row (reads market data via hook) ────────── */
+/* ── Position rows for a single market ─────────────────────────── */
 function PositionRow({
   marketAddress,
   autoDecrypt,
+  onAmountsReady,
 }: {
   marketAddress: `0x${string}`;
   userAddress: `0x${string}`;
   autoDecrypt?: boolean;
+  onAmountsReady?: (staked: number, potentialWin: number) => void;
 }) {
   const {
     question,
     status,
     yesOdds,
+    noOdds,
     isLoading: isMarketLoading,
   } = useMarket(marketAddress);
 
-  const storePosition = useNullCastStore((s) =>
-    s.positions.find((p) => p.marketAddress === marketAddress)
-  );
-
-  const { decrypt, isDecrypting, yesAmount, noAmount, isDecrypted } =
+  const { decrypt, isDecrypting, yesAmount, noAmount, isDecrypted, hasYesPosition, hasNoPosition } =
     __useUserDecrypt(marketAddress);
 
   const triggered = React.useRef(false);
@@ -56,27 +55,46 @@ function PositionRow({
     }
   }, [autoDecrypt, isDecrypted, isDecrypting, decrypt]);
 
-  const yesAmt = yesAmount ? (Number(yesAmount) / 1e6).toFixed(2) : null;
-  const noAmt = noAmount ? (Number(noAmount) / 1e6).toFixed(2) : null;
-  const hasYes = yesAmount && yesAmount > BigInt(0);
-  const hasNo = noAmount && noAmount > BigInt(0);
+  const yesNum = yesAmount ? Number(yesAmount) / 1e6 : 0;
+  const noNum = noAmount ? Number(noAmount) / 1e6 : 0;
 
-  const sideLabel = isDecrypted
-    ? hasYes ? "YES" : hasNo ? "NO" : storePosition?.side ?? "--"
-    : storePosition?.side ?? "--";
+  // Report aggregate stats to parent
+  const reportedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (isDecrypted && onAmountsReady && !reportedRef.current) {
+      reportedRef.current = true;
+      const staked = yesNum + noNum;
+      // Potential payout if each side wins
+      const yesOddsVal = yesOdds ?? 50;
+      const noOddsVal = noOdds ?? 50;
+      const yesPayout = yesOddsVal > 0 ? yesNum * (100 / yesOddsVal) : 0;
+      const noPayout = noOddsVal > 0 ? noNum * (100 / noOddsVal) : 0;
+      const potentialWin = (yesPayout - yesNum) + (noPayout - noNum);
+      onAmountsReady(staked, potentialWin);
+    }
+  }, [isDecrypted, yesNum, noNum, yesOdds, noOdds, onAmountsReady]);
 
-  const displayAmount = isDecrypted ? (hasYes ? yesAmt : noAmt) ?? "0.00" : "0.00";
-  const entryOdds = 50;
-  const currentOdds = yesOdds ?? 50;
-  const delta = currentOdds - entryOdds;
-
-  const pnl = isDecrypted ? (delta * parseFloat(displayAmount) / 100) : 0;
+  const currentYesOdds = yesOdds ?? 50;
+  const currentNoOdds = noOdds ?? 50;
   const isResolved = status === 2;
+
+  // Build rows: one per side the user holds
+  const rows: Array<{ side: "YES" | "NO"; amount: number; encrypted: boolean }> = [];
+
+  if (isDecrypted) {
+    if (yesNum > 0) rows.push({ side: "YES", amount: yesNum, encrypted: false });
+    if (noNum > 0) rows.push({ side: "NO", amount: noNum, encrypted: false });
+    if (rows.length === 0) rows.push({ side: "YES", amount: 0, encrypted: false });
+  } else {
+    if (hasYesPosition) rows.push({ side: "YES", amount: 0, encrypted: true });
+    if (hasNoPosition) rows.push({ side: "NO", amount: 0, encrypted: true });
+    if (rows.length === 0) rows.push({ side: "YES", amount: 0, encrypted: true });
+  }
 
   const gridStyle: React.CSSProperties = {
     width: "100%",
     display: "grid",
-    gridTemplateColumns: "2fr 60px 120px 140px 120px",
+    gridTemplateColumns: "2fr 60px 100px 80px 120px",
     alignItems: "center",
     padding: "16px 18px",
     borderBottom: "1px solid var(--line)",
@@ -89,88 +107,108 @@ function PositionRow({
 
   return (
     <>
-    <div
-      style={gridStyle}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-1)")}
-      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-    >
-      <span
-        className="serif"
-        style={{
-          fontSize: 15,
-          color: "var(--ink-1)",
-          letterSpacing: "-0.005em",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          paddingRight: 16,
-        }}
-      >
-        {isMarketLoading ? "Loading..." : question ?? "Unknown market"}
-      </span>
+      {rows.map((row, i) => {
+        // Potential payout if this side wins
+        const sideOdds = row.side === "YES" ? currentYesOdds : currentNoOdds;
+        const payout = !row.encrypted && sideOdds > 0
+          ? row.amount * (100 / sideOdds)
+          : 0;
+        const profit = payout - row.amount;
 
-      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: sideLabel === "YES" ? "var(--yes)" : sideLabel === "NO" ? "var(--no)" : "var(--ink-4)",
-          }}
-        />
-        <span
-          className="mono"
-          style={{
-            fontSize: 11,
-            color: sideLabel === "YES" ? "var(--yes)" : sideLabel === "NO" ? "var(--no)" : "var(--ink-4)",
-          }}
-        >
-          {sideLabel}
-        </span>
-      </span>
+        return (
+          <React.Fragment key={`${marketAddress}-${row.side}-${i}`}>
+            <div
+              style={gridStyle}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-1)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              {/* Market name */}
+              <span
+                className="serif"
+                style={{
+                  fontSize: 15,
+                  color: "var(--ink-1)",
+                  letterSpacing: "-0.005em",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  paddingRight: 16,
+                }}
+              >
+                {isMarketLoading ? "Loading..." : question ?? "Unknown market"}
+              </span>
 
-      <span className="mono" style={{ fontSize: 13, color: "var(--ink-1)" }}>
-        <CipherReveal value={displayAmount} reveal={isDecrypted && displayAmount !== "0.00"} width={7} />
-      </span>
+              {/* Side indicator */}
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: row.side === "YES" ? "var(--yes)" : row.side === "NO" ? "var(--no)" : "var(--ink-4)",
+                  }}
+                />
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: 11,
+                    color: row.side === "YES" ? "var(--yes)" : row.side === "NO" ? "var(--no)" : "var(--ink-4)",
+                  }}
+                >
+                  {row.side}
+                </span>
+              </span>
 
-      <span
-        className="mono"
-        style={{ fontSize: 12, color: "var(--ink-2)", display: "flex", alignItems: "center", gap: 6 }}
-      >
-        <span style={{ color: "var(--ink-3)" }}>{entryOdds}%</span>
-        <Icon name="arrow-right" size={10} color="var(--ink-4)" />
-        <span style={{ color: "var(--ink-1)" }}>{currentOdds}%</span>
-        {delta !== 0 && (
-          <span
-            style={{
-              color: delta > 0 ? "var(--yes)" : "var(--no)",
-              fontSize: 10,
-            }}
-          >
-            {delta > 0 ? "\u25B2" : "\u25BC"}{Math.abs(delta)}
-          </span>
-        )}
-      </span>
+              {/* Staked amount */}
+              <span className="mono" style={{ fontSize: 13, color: "var(--ink-1)" }}>
+                {row.encrypted ? (
+                  <span style={{ color: "var(--ink-4)", letterSpacing: "0.05em", fontSize: 11 }}>
+                    {isDecrypting ? (
+                      <span className="pulse-text">decrypting</span>
+                    ) : (
+                      "encrypted"
+                    )}
+                  </span>
+                ) : (
+                  <CipherReveal value={row.amount.toFixed(2)} reveal={true} width={7} />
+                )}
+              </span>
 
-      <span
-        className="mono"
-        style={{
-          fontSize: 13,
-          textAlign: "right",
-          color: isDecrypted
-            ? pnl >= 0 ? "var(--yes)" : "var(--no)"
-            : "var(--ink-1)",
-        }}
-      >
-        {isDecrypted && pnl >= 0 ? "+" : ""}
-        <CipherReveal value={Math.abs(pnl).toFixed(2)} reveal={isDecrypted && displayAmount !== "0.00"} width={6} />
-      </span>
-    </div>
-    {isResolved && (
-      <div style={{ padding: "0 18px 12px", borderBottom: "1px solid var(--line)" }}>
-        <ClaimButton marketAddress={marketAddress} />
-      </div>
-    )}
+              {/* Current odds for this side */}
+              <span className="mono" style={{ fontSize: 12, color: "var(--ink-2)" }}>
+                {sideOdds}%
+              </span>
+
+              {/* Potential payout if wins */}
+              <span
+                className="mono"
+                style={{
+                  fontSize: 13,
+                  textAlign: "right",
+                  color: row.encrypted ? "var(--ink-4)" : "var(--yes)",
+                }}
+              >
+                {row.encrypted ? (
+                  "--"
+                ) : row.amount === 0 ? (
+                  "0.00"
+                ) : (
+                  <>
+                    +<CipherReveal value={profit.toFixed(2)} reveal={true} width={6} />
+                  </>
+                )}
+              </span>
+            </div>
+
+            {/* Claim button for resolved */}
+            {isResolved && i === rows.length - 1 && (
+              <div style={{ padding: "8px 18px 12px", borderBottom: "1px solid var(--line)" }}>
+                <ClaimButton marketAddress={marketAddress} />
+              </div>
+            )}
+          </React.Fragment>
+        );
+      })}
     </>
   );
 }
@@ -218,15 +256,24 @@ function MarketPositionCheck({
   marketAddress,
   userAddress,
   autoDecrypt,
+  onAmountsReady,
 }: {
   marketAddress: `0x${string}`;
   userAddress: `0x${string}`;
   autoDecrypt?: boolean;
+  onAmountsReady?: (staked: number, potentialWin: number) => void;
 }) {
   const hasPos = useHasPosition(marketAddress, userAddress);
 
   if (hasPos === true) {
-    return <PositionRow marketAddress={marketAddress} userAddress={userAddress} autoDecrypt={autoDecrypt} />;
+    return (
+      <PositionRow
+        marketAddress={marketAddress}
+        userAddress={userAddress}
+        autoDecrypt={autoDecrypt}
+        onAmountsReady={onAmountsReady}
+      />
+    );
   }
 
   return null;
@@ -239,8 +286,32 @@ export default function PortfolioPage() {
   useNullCastStore((s) => s.positions);
 
   const [revealAll, setRevealAll] = useState(false);
+  const [isDecryptingAll, setIsDecryptingAll] = useState(false);
 
-  const positionCount = allMarkets.length;
+  // Aggregate stats from decrypted positions
+  const [revealedStats, setRevealedStats] = useState<Record<string, { staked: number; potentialWin: number }>>({});
+
+  const handleAmountsReady = React.useCallback((market: string) => (staked: number, potentialWin: number) => {
+    setRevealedStats((prev) => ({ ...prev, [market]: { staked, potentialWin } }));
+  }, []);
+
+  const { totalStaked, totalPotentialWin } = useMemo(() => {
+    let staked = 0;
+    let win = 0;
+    Object.values(revealedStats).forEach((s) => {
+      staked += s.staked;
+      win += s.potentialWin;
+    });
+    return { totalStaked: staked, totalPotentialWin: win };
+  }, [revealedStats]);
+
+  const hasRevealed = Object.keys(revealedStats).length > 0;
+
+  const handleRevealAll = () => {
+    setRevealAll(true);
+    setIsDecryptingAll(true);
+    setTimeout(() => setIsDecryptingAll(false), 15000);
+  };
 
   return (
     <div className="page-in" style={{ maxWidth: 1280, margin: "0 auto", padding: "44px 48px 80px" }}>
@@ -250,7 +321,7 @@ export default function PortfolioPage() {
           Portfolio
         </h1>
         <button
-          onClick={() => setRevealAll(true)}
+          onClick={handleRevealAll}
           disabled={revealAll || !isConnected || !address}
           style={{
             display: "flex",
@@ -266,7 +337,7 @@ export default function PortfolioPage() {
           }}
         >
           <Icon name="eye" size={12} />
-          {revealAll ? "All revealed" : "Reveal all"}
+          {isDecryptingAll ? "Decrypting..." : revealAll ? "Revealed" : "Reveal all positions"}
         </button>
       </div>
 
@@ -274,21 +345,27 @@ export default function PortfolioPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
+          gridTemplateColumns: "repeat(3, 1fr)",
           gap: 48,
           paddingBottom: 32,
           borderBottom: "1px solid var(--line)",
         }}
       >
         <Stat label="Positions">
-          {isMarketsLoading ? "..." : positionCount}
+          {isMarketsLoading ? "..." : allMarkets.length}
         </Stat>
         <div>
           <div className="mono" style={{ fontSize: 34, fontWeight: 500, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
-            <CipherReveal value="0.00" reveal={revealAll} width={8} />
+            {hasRevealed ? (
+              <CipherReveal value={totalStaked.toFixed(2)} reveal={true} width={8} />
+            ) : (
+              <span style={{ color: "var(--ink-4)" }}>
+                {isDecryptingAll ? <span className="pulse-text">...</span> : "---"}
+              </span>
+            )}
           </div>
           <div style={{ marginTop: 6, fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-            At stake
+            Total staked
           </div>
         </div>
         <div>
@@ -299,33 +376,38 @@ export default function PortfolioPage() {
               fontWeight: 500,
               letterSpacing: "-0.02em",
               lineHeight: 1.1,
-              color: "var(--ink-1)",
+              color: hasRevealed ? "var(--yes)" : "var(--ink-1)",
             }}
           >
-            <CipherReveal value="0.00" reveal={revealAll} width={8} />
+            {hasRevealed ? (
+              <>+<CipherReveal value={totalPotentialWin.toFixed(2)} reveal={true} width={8} /></>
+            ) : (
+              <span style={{ color: "var(--ink-4)" }}>
+                {isDecryptingAll ? <span className="pulse-text">...</span> : "---"}
+              </span>
+            )}
           </div>
           <div style={{ marginTop: 6, fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-            P&amp;L
-          </div>
-        </div>
-        <div>
-          <div className="mono" style={{ fontSize: 34, fontWeight: 500, letterSpacing: "-0.02em", lineHeight: 1.1, color: "var(--gold)" }}>
-            0.00
-          </div>
-          <div style={{ marginTop: 6, fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-            Claimable
+            Potential winnings
           </div>
         </div>
       </div>
 
+      {/* Note about potential winnings */}
+      {hasRevealed && (
+        <div style={{ marginTop: 12, fontSize: 11, color: "var(--ink-4)", fontStyle: "italic" }}>
+          Potential winnings = payout if your side wins at current odds. Not guaranteed.
+        </div>
+      )}
+
       {/* Table */}
-      <div style={{ marginTop: 36 }}>
+      <div style={{ marginTop: 28 }}>
         {/* Header row */}
         <div
           className="mono"
           style={{
             display: "grid",
-            gridTemplateColumns: "2fr 60px 120px 140px 120px",
+            gridTemplateColumns: "2fr 60px 100px 80px 120px",
             padding: "10px 18px",
             fontSize: 9,
             color: "var(--ink-4)",
@@ -336,9 +418,9 @@ export default function PortfolioPage() {
         >
           <span>Market</span>
           <span>Side</span>
-          <span>Amount</span>
+          <span>Staked</span>
           <span>Odds</span>
-          <span style={{ textAlign: "right" }}>P&amp;L</span>
+          <span style={{ textAlign: "right" }}>If wins</span>
         </div>
 
         {/* Content */}
@@ -361,6 +443,7 @@ export default function PortfolioPage() {
               marketAddress={addr}
               userAddress={address}
               autoDecrypt={revealAll}
+              onAmountsReady={handleAmountsReady(addr)}
             />
           ))
         )}

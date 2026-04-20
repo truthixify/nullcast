@@ -68,6 +68,7 @@ function MarketCard({
     yesOdds,
     noOdds,
     isLoading,
+    isOddsLoading,
   } = useMarket(address);
 
   if (isLoading) {
@@ -148,9 +149,13 @@ function MarketCard({
         )}
       </div>
 
-      {/* Odds bar */}
+      {/* Odds bar — show skeleton while odds are loading */}
       <div style={{ marginBottom: 14 }}>
-        <OddsBar yes={yesOdds} no={noOdds} size="md" muted={resolved} />
+        {isOddsLoading ? (
+          <div className="skel" style={{ width: "100%", height: 10, borderRadius: 5 }} />
+        ) : (
+          <OddsBar yes={yesOdds} no={noOdds} size="md" muted={resolved} />
+        )}
       </div>
 
       {/* Stats row */}
@@ -164,17 +169,23 @@ function MarketCard({
           alignItems: "center",
         }}
       >
-        <span>{formatCUSDT(totalPool)} pool</span>
-        <span style={{ color: "var(--ink-4)" }}>&middot;</span>
-        <span>
-          {fmtExpiry(expiryBlock, currentBlock ?? undefined)}
-        </span>
-        {resolved && (
+        {isOddsLoading ? (
+          <span className="pulse-text">loading odds...</span>
+        ) : (
           <>
+            <span>{formatCUSDT(totalPool)} pool</span>
             <span style={{ color: "var(--ink-4)" }}>&middot;</span>
-            <span style={{ color: "var(--yes)" }}>
-              Resolved YES
+            <span>
+              {fmtExpiry(expiryBlock, currentBlock ?? undefined)}
             </span>
+            {resolved && (
+              <>
+                <span style={{ color: "var(--ink-4)" }}>&middot;</span>
+                <span style={{ color: "var(--yes)" }}>
+                  Resolved YES
+                </span>
+              </>
+            )}
           </>
         )}
       </div>
