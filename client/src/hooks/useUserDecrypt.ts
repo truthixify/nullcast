@@ -156,9 +156,19 @@ export function useUserDecrypt(marketAddress: `0x${string}`) {
   // Check localStorage for previously decrypted values
   const cachedYes = useNullCastStore((s) => s.decryptedValues[`${marketAddress}-yes`]);
   const cachedNo = useNullCastStore((s) => s.decryptedValues[`${marketAddress}-no`]);
+  const invalidate = useNullCastStore((s) => s.invalidateDecryptedValues);
+
+  const refresh = useCallback(async () => {
+    // Clear cache so decrypt fetches fresh values from KMS
+    invalidate(marketAddress);
+    setYesAmount(null);
+    setNoAmount(null);
+    await decrypt();
+  }, [invalidate, marketAddress, decrypt]);
 
   return {
     decrypt,
+    refresh,
     isDecrypting,
     error,
     hasYesPosition,
@@ -166,5 +176,6 @@ export function useUserDecrypt(marketAddress: `0x${string}`) {
     yesAmount: yesAmount ?? (cachedYes ? BigInt(cachedYes) : null),
     noAmount: noAmount ?? (cachedNo ? BigInt(cachedNo) : null),
     isDecrypted: yesAmount !== null || noAmount !== null || !!cachedYes || !!cachedNo,
+    isCached: !!(cachedYes || cachedNo) && yesAmount === null && noAmount === null,
   };
 }

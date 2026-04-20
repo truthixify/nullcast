@@ -16,6 +16,7 @@ interface NullCastStore {
   decryptedValues: Record<string, string>;
   addPosition: (position: Omit<Position, "timestamp">) => void;
   setDecryptedValue: (handle: string, value: string) => void;
+  invalidateDecryptedValues: (marketAddress: string) => void;
   revealPosition: (marketAddress: string) => void;
 }
 
@@ -37,6 +38,14 @@ export const useNullCastStore = create<NullCastStore>()(
         set((state) => ({
           decryptedValues: { ...state.decryptedValues, [handle]: value },
         })),
+
+      invalidateDecryptedValues: (marketAddress) =>
+        set((state) => {
+          const next = { ...state.decryptedValues };
+          delete next[`${marketAddress}-yes`];
+          delete next[`${marketAddress}-no`];
+          return { decryptedValues: next };
+        }),
 
       revealPosition: (marketAddress) =>
         set((state) => ({

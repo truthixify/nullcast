@@ -166,6 +166,7 @@ export default function MarketDetailPage({
 
   /* ── Zustand store ───────────────────────────────────────────── */
   const addPosition = useNullCastStore((s) => s.addPosition);
+  const invalidateDecrypt = useNullCastStore((s) => s.invalidateDecryptedValues);
   const storedPositions = useNullCastStore((s) => s.positions);
 
   /* ── Local UI state ──────────────────────────────────────────── */
@@ -274,6 +275,8 @@ export default function MarketDetailPage({
         txHash: bet.hash,
       });
       setBetStep("confirmed");
+      // Invalidate cached decrypted values so next decrypt fetches fresh
+      invalidateDecrypt(resolvedAddress);
       oddsKeeper.updateOdds();
       setTimeout(() => market.refetch(), 15_000);
     }
@@ -290,6 +293,7 @@ export default function MarketDetailPage({
     selectedPct,
     bet.hash,
     addPosition,
+    invalidateDecrypt,
     oddsKeeper,
     market,
   ]);
@@ -997,8 +1001,20 @@ export default function MarketDetailPage({
             <div className="card" style={{ marginTop: 16 }}>
               <div className="card-head">
                 <span className="row gap-2" style={{ gap: 6 }}>
-                  <LockIcon size={11} /> Your on-chain position
+                  <LockIcon size={11} /> Your position
                 </span>
+                {userDecrypt.isDecrypted && (
+                  <button
+                    className="btn sm ghost"
+                    type="button"
+                    onClick={userDecrypt.refresh}
+                    disabled={userDecrypt.isDecrypting}
+                    style={{ fontSize: 11, gap: 4 }}
+                  >
+                    <RefreshIcon size={10} />
+                    {userDecrypt.isCached ? "Cached" : "Refresh"}
+                  </button>
+                )}
               </div>
               <div className="card-body">
                 {userDecrypt.isDecrypted ? (

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en" data-accent="amber">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>nullcast — confidential prediction markets</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="data.jsx"></script>
+  <script type="text/babel" src="components.jsx"></script>
+  <script type="text/babel" src="pages-1.jsx"></script>
+  <script type="text/babel" src="pages-2.jsx"></script>
+  <script type="text/babel" src="pages-3.jsx"></script>
+
+  <script>
+    // Tweakable defaults (persisted via host)
+    window.TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+      "accent": "amber"
+    }/*EDITMODE-END*/;
+  </script>
+
+  <script type="text/babel">
+  const { useState, useEffect, useMemo } = React;
+
+  function App() {
+    // route: { page: "landing"|"markets"|"detail"|"create"|"portfolio"|"reputation", id?: string }
+    const [route, setRoute] = useState(() => {
+      try {
+        const saved = JSON.parse(localStorage.getItem("nc:route") || "null");
+        return saved || { page: "landing" };
+      } catch { return { page: "landing" }; }
+    });
+    const [accent, setAccent] = useState(window.TWEAK_DEFAULTS.accent || "amber");
+    const [toasts, setToasts] = useState([]);
+    const [tweaksOn, setTweaksOn] = useState(false);
+
+    useEffect(() => { document.documentElement.setAttribute("data-accent", accent); }, [accent]);
+    useEffect(() => { localStorage.setItem("nc:route", JSON.stringify(route)); window.scrollTo({top:0}); }, [route]);
+
+    const goto = (page, id) => setRoute({ page, id });
+    const pushToast = (msg, icon) => {
+      const id = Math.random().toString(36).slice(2);
+      setToasts(t => [...t, { id, msg, icon }]);
+      setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 2800);
+    };
+
+    // Tweaks integration
+    useEffect(() => {
+      const onMsg = (e) => {
+        const d = e.data;
+        if (!d || !d.type) return;
+        if (d.type === "__activate_edit_mode") setTweaksOn(true);
+        if (d.type === "__deactivate_edit_mode") setTweaksOn(false);
+      };
+      window.addEventListener("message", onMsg);
+      window.parent.postMessage({ type: "__edit_mode_available" }, "*");
+      return () => window.removeEventListener("message", onMsg);
+    }, []);
+
+    const updateAccent = (a) => {
+      setAccent(a);
+      window.parent.postMessage({ type: "__edit_mode_set_keys", edits: { accent: a } }, "*");
+    };
+
+    const page = (() => {
+      switch(route.page) {
+        case "landing":    return <Landing goto={goto}/>;
+        case "markets":    return <MarketsList goto={goto}/>;
+        case "detail":     return <MarketDetail id={route.id} goto={goto} pushToast={pushToast}/>;
+        case "create":     return <CreateMarket goto={goto} pushToast={pushToast}/>;
+        case "portfolio":  return <Portfolio goto={goto} pushToast={pushToast}/>;
+        case "reputation": return <Reputation pushToast={pushToast}/>;
+        default:           return <Landing goto={goto}/>;
+      }
+    })();
+
+    return (
+      <div className="app">
+        <Header route={route} goto={goto}/>
+        {page}
+        <Footer/>
+        <Toasts toasts={toasts}/>
+        <TweaksPanel accent={accent} setAccent={updateAccent} visible={tweaksOn}/>
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
+</body>
+</html>
