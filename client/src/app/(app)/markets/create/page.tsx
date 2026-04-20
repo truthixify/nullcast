@@ -4,12 +4,15 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount, useBlockNumber } from "wagmi";
+import { stringToHex } from "viem";
 import { useCreateMarket } from "@/hooks/useFactory";
 import {
   ChevronIcon,
   CheckIcon,
   ExternalIcon,
 } from "@/components/shared/Icons";
+
+const CATEGORY_OPTIONS = ["CRYPTO", "MACRO", "EQUITY", "SPORTS", "TECH", "OTHER"] as const;
 
 const SEPOLIA_BLOCK_TIME_SECONDS = 12;
 
@@ -75,6 +78,7 @@ export default function CreateMarketPage() {
   const [minimumBet, setMinimumBet] = useState("1");
   const [marketType, setMarketType] = useState<"binary" | "scalar">("binary");
   const [bucketCount, setBucketCount] = useState("3");
+  const [category, setCategory] = useState<typeof CATEGORY_OPTIONS[number]>("CRYPTO");
 
   const expiryBlock = useMemo(() => {
     if (!expiry || !currentBlock) return undefined;
@@ -101,7 +105,8 @@ export default function CreateMarketPage() {
   const handleSubmit = () => {
     if (!isFormValid || !expiryBlock || !minimumBetInBaseUnits) return;
     const buckets = marketType === "scalar" ? parseInt(bucketCount) : 0;
-    createMarket(question.trim(), expiryBlock, minimumBetInBaseUnits, buckets);
+    const categoryBytes = stringToHex(category, { size: 32 });
+    createMarket(question.trim(), expiryBlock, minimumBetInBaseUnits, buckets, categoryBytes);
   };
 
   if (isConfirmed) {
@@ -171,6 +176,24 @@ export default function CreateMarketPage() {
                         disabled={txState !== "idle"}
                         onClick={() => setMarketType("scalar")}
                       />
+                    </div>
+                  </div>
+
+                  {/* Category */}
+                  <div className="field">
+                    <label>Category</label>
+                    <div className="row gap-2" style={{ flexWrap: "wrap" }}>
+                      {CATEGORY_OPTIONS.map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          className={`btn sm ${category === cat ? "primary" : "ghost"}`}
+                          onClick={() => setCategory(cat)}
+                          disabled={txState !== "idle"}
+                        >
+                          {cat}
+                        </button>
+                      ))}
                     </div>
                   </div>
 

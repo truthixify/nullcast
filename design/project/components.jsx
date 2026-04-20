@@ -148,7 +148,7 @@ const Header = ({ route, goto }) => {
       <div className="container row">
         <a className="brand" onClick={() => goto("landing")} style={{cursor:"pointer"}}>
           <span className="mark" style={{color:"var(--acc)"}}><BrandMark /></span>
-          <span>nullcast</span>
+          <span>NullCast</span>
           <span className="pill neutral" style={{marginLeft:8,fontSize:9,letterSpacing:".1em"}}>BETA</span>
         </a>
         <nav className="nav">
@@ -180,7 +180,7 @@ const Footer = () => (
       <div className="row" style={{color:"var(--t-3)"}}>
         <span className="brand" style={{fontSize:13,color:"var(--t-3)"}}>
           <span style={{color:"var(--t-3)"}}><BrandMark size={14}/></span>
-          nullcast
+          NullCast
         </span>
         <span className="mono" style={{color:"var(--t-4)"}}>v0.4.2</span>
       </div>
@@ -228,7 +228,7 @@ const TweaksPanel = ({ accent, setAccent, visible }) => {
     <div className="tweaks">
       <div className="hd">
         <span>Tweaks</span>
-        <span style={{color:"var(--t-4)"}}>nullcast</span>
+        <span style={{color:"var(--t-4)"}}>NullCast</span>
       </div>
       <div className="body">
         <div className="opt">

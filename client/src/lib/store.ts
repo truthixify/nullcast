@@ -55,7 +55,7 @@ export const useNullCastStore = create<NullCastStore>()(
         })),
     }),
     {
-      name: "nullcast-positions",
+      name: "NullCast-positions",
     }
   )
 );

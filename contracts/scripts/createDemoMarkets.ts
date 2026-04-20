@@ -24,7 +24,8 @@ async function main() {
     "BTC above $90,000 on April 30, 2026?",
     currentBlock + 216000, // ~30 days at 12s blocks
     1_000_000, // 1 cUSDT minimum
-    0 // binary
+    0, // binary
+    ethers.encodeBytes32String("CRYPTO")
   );
   await btcTx.wait();
   const btcMarketAddr = await factory.getMarket(0);
@@ -40,7 +41,8 @@ async function main() {
     "ETH above $2,000 on May 5, 2026?",
     currentBlock + 252000, // ~35 days
     1_000_000,
-    0
+    0,
+    ethers.encodeBytes32String("CRYPTO")
   );
   await ethTx.wait();
   const ethMarketAddr = await factory.getMarket(1);
@@ -55,7 +57,8 @@ async function main() {
     "BTC price range on May 10: <$80k / $80k-$100k / >$100k",
     currentBlock + 288000, // ~40 days
     1_000_000,
-    3 // 3 buckets
+    3, // 3 buckets
+    ethers.encodeBytes32String("CRYPTO")
   );
   await scalarTx.wait();
   const scalarMarketAddr = await factory.getMarket(2);

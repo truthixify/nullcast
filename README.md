@@ -75,20 +75,21 @@ nullcast/
 
 | Contract | Address | Etherscan |
 |---|---|---|
-| MockcUSDT | `0x5D59bc6f396fC1FAceAefD39cED413CEE0a655CD` | [View](https://sepolia.etherscan.io/address/0x5D59bc6f396fC1FAceAefD39cED413CEE0a655CD#code) |
-| OracleMock | `0x290F819259765Bb95E68bd31a092cBA965641390` | [View](https://sepolia.etherscan.io/address/0x290F819259765Bb95E68bd31a092cBA965641390#code) |
-| ReputationGate | `0x8a201504279f134e8133da87B3d0d5728A9635A7` | [View](https://sepolia.etherscan.io/address/0x8a201504279f134e8133da87B3d0d5728A9635A7#code) |
-| NullCastFactory | `0xdc0e034aCf1c911b621bFF4f1De678b207b7C95B` | [View](https://sepolia.etherscan.io/address/0xdc0e034aCf1c911b621bFF4f1De678b207b7C95B#code) |
+| MockcUSDT | `0x904793F739dA238686078dDC477CeFD2a071F9F9` | [View](https://sepolia.etherscan.io/address/0x904793F739dA238686078dDC477CeFD2a071F9F9#code) |
+| OracleMock | `0xF01fa4F99146A938633E06DC8C9B3CE72778a846` | [View](https://sepolia.etherscan.io/address/0xF01fa4F99146A938633E06DC8C9B3CE72778a846#code) |
+| ReputationGate | `0xfC448A571c0bEBf9B7f5AfA2bac89137F460DeA8` | [View](https://sepolia.etherscan.io/address/0xfC448A571c0bEBf9B7f5AfA2bac89137F460DeA8#code) |
+| NullCastFactory | `0x5BEe5fae827Cebd188A44C55d89323693888c059` | [View](https://sepolia.etherscan.io/address/0x5BEe5fae827Cebd188A44C55d89323693888c059#code) |
+| VaultFactory | `0xe3675c64a72eFc3e89105B826720Eb7E9f956f8a` | [View](https://sepolia.etherscan.io/address/0xe3675c64a72eFc3e89105B826720Eb7E9f956f8a#code) |
 
-Each market automatically gets a paired LiquidityPool deployed by the Factory.
+Each market gets a paired LiquidityPool. Each vault is deployed by VaultFactory.
 
 ### Demo Markets
 
-| Market | Address | Type |
-|---|---|---|
-| BTC above $90k on Apr 30? | `0x52c58a6E509B4228a517648247A7554Dd0ff52fE` | Binary |
-| ETH above $2k on May 5? | `0xB883ef0a6cdF3a070aEe886a1F68f2642a46EcE5` | Binary |
-| BTC price range May 10 | `0x2Cb8D5B162a5D726EFAF50e9a926F58AC44719df` | Scalar (3 buckets) |
+| Market | Address | Type | Category |
+|---|---|---|---|
+| BTC above $90k on Apr 30? | `0xF539719aDf6646D0842aCECbBB1190EeecAE8F55` | Binary | CRYPTO |
+| ETH above $2k on May 5? | `0xA04f5885f979FC925487327aA027C7781BEec5BC` | Binary | CRYPTO |
+| BTC price range May 10 | `0xf2848303d93149dF0113fE8c13404A07b99924C4` | Scalar (3 buckets) | CRYPTO |
 
 ---
 
@@ -168,10 +169,11 @@ FHE.allow(userPositions[msg.sender], msg.sender); // user can decrypt
 FHE.makePubliclyDecryptable(totalYesPool);
 ```
 
-### Market Types
+### Market Types & Categories
 
 - **Binary** — YES/NO outcome, two pools
 - **Scalar** — Multiple buckets (e.g., price ranges), N pools
+- **Categories** — Markets tagged with `bytes32` category (CRYPTO, MACRO, EQUITY, SPORTS, TECH). Filterable on the frontend.
 
 ### Market Lifecycle
 
@@ -206,18 +208,42 @@ Participation is tracked automatically: `NullCastMarket.placeBet()` calls `Reput
 
 **Keeper script:** `npx hardhat run scripts/computeScores.ts --network sepolia` computes scores for active users per epoch.
 
+### Dispute Resolution
+
+Markets have a 24-hour dispute window (~7200 blocks) after resolution:
+
+1. Oracle resolves the market
+2. 7200-block window opens — anyone can call `raiseDispute()` with a bond
+3. If disputed, claims are frozen pending owner review
+4. Owner calls `resolveDispute(upheld, newOutcome)` — if upheld, outcome is reversed and a new window opens; if rejected, original outcome stands
+5. After window closes with no dispute, winners can claim
+
+### Strategy Vaults (Copy-Trading)
+
+Managers create vaults, followers deposit cUSDT:
+
+- **Manager** creates a vault with a name, required reputation tier, and performance fee
+- **Followers** deposit encrypted cUSDT into the vault
+- **Manager** places bets from vault funds across markets
+- Individual allocations are encrypted — followers see the vault's aggregate performance
+- **Vault closure**: manager closes the vault, followers withdraw
+
+Contracts: `StrategyVault.sol` + `VaultFactory.sol`
+
 ---
 
 ## Test Coverage
 
 ```
-79 tests passing across 7 test files:
+122 tests passing across 9 test files:
 
-  NullCastMarket:  27 tests — placeBet, odds, resolve, claim, admin
-  NullCastFactory: 15 tests — creation, validation, admin
+  NullCastMarket:  39 tests — placeBet, odds, resolve, claim, dispute, categories, admin
+  NullCastFactory: 17 tests — creation, LP pool deployment, validation, admin
   LiquidityPool:    8 tests — deposits, withdrawal, LP tracking
   OracleMock:       7 tests — registration, resolution
   ReputationGate:  13 tests — scoring, decay, threshold
+  StrategyVault:   17 tests — deposit, withdraw, close, access control
+  VaultFactory:    10 tests — create, registry, views
   Integration:      2 tests — full YES/NO lifecycle with factory + oracle
   Scalar:           4 tests — bucket betting, validation
 ```

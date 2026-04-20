@@ -39,12 +39,13 @@ export function useCreateMarket() {
     question: string,
     expiryBlock: bigint,
     minimumBet: bigint,
-    bucketCount: number = 0
+    bucketCount: number = 0,
+    category: `0x${string}` = "0x0000000000000000000000000000000000000000000000000000000000000000"
   ) => {
     writeContract({
       ...nullCastFactoryConfig,
       functionName: "createMarket",
-      args: [question, expiryBlock, minimumBet, bucketCount],
+      args: [question, expiryBlock, minimumBet, bucketCount, category],
     });
   };
 

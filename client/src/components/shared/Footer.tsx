@@ -11,7 +11,7 @@ export function Footer() {
             <span style={{ color: "var(--t-3)" }}>
               <BrandMark size={14} />
             </span>{" "}
-            nullcast
+            NullCast
           </span>
         </div>
         <div className="row">

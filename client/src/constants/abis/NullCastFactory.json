@@ -226,6 +226,11 @@
         "internalType": "uint8",
         "name": "_bucketCount",
         "type": "uint8"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "_category",
+        "type": "bytes32"
       }
     ],
     "name": "createMarket",

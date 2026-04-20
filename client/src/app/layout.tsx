@@ -27,20 +27,20 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "nullcast — Bet without revealing",
+  title: "NullCast — Bet without revealing",
   description: "Prediction markets where your position is encrypted on-chain. Nobody sees your side, your size, or your P&L.",
   icons: {
     icon: "/icon.svg",
   },
   openGraph: {
-    title: "nullcast",
+    title: "NullCast",
     description: "Confidential prediction markets. Encrypted positions. Public odds.",
-    siteName: "nullcast",
+    siteName: "NullCast",
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "nullcast — Bet without revealing",
+    title: "NullCast — Bet without revealing",
     description: "Prediction markets with FHE-encrypted positions on Zama fhEVM.",
   },
 };

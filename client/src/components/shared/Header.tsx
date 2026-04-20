@@ -9,6 +9,7 @@ const navItems = [
   { href: "/markets", label: "Markets" },
   { href: "/portfolio", label: "Portfolio" },
   { href: "/liquidity", label: "Liquidity" },
+  { href: "/vaults", label: "Vaults" },
   { href: "/reputation", label: "Score" },
 ];
 
@@ -24,7 +25,7 @@ export function Header() {
             <span className="mark" style={{ color: "var(--acc)" }}>
               <BrandMark />
             </span>
-            <span>nullcast</span>
+            <span>NullCast</span>
           </Link>
           <nav className="nav">
             {navItems.map((n) => (

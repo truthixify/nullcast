@@ -109,7 +109,7 @@ export default function LandingPage() {
               <div className="row gap-4">
                 <Link href="/markets" className="btn primary lg">Launch app</Link>
                 <a
-                  href="https://docs.nullcast.xyz"
+                  href="https://docs.NullCast.xyz"
                   className="btn secondary lg"
                   target="_blank"
                   rel="noopener noreferrer"

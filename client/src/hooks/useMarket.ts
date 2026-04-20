@@ -1,6 +1,7 @@
 "use client";
 
 import { useReadContract, useReadContracts } from "wagmi";
+import { hexToString } from "viem";
 import { getMarketConfig } from "@/lib/contracts";
 
 interface UseMarketOptions {
@@ -23,6 +24,10 @@ export function useMarket(marketAddress: `0x${string}`, options?: UseMarketOptio
       { ...config, functionName: "oracle" },
       { ...config, functionName: "marketId" },
       { ...config, functionName: "bucketCount" },
+      { ...config, functionName: "category" },
+      { ...config, functionName: "disputed" },
+      { ...config, functionName: "resolvedAtBlock" },
+      { ...config, functionName: "DISPUTE_WINDOW" },
     ],
     query: {
       refetchInterval: options?.refetchInterval,
@@ -40,6 +45,14 @@ export function useMarket(marketAddress: `0x${string}`, options?: UseMarketOptio
   const oracle = data?.[8]?.result as string | undefined;
   const marketId = data?.[9]?.result as bigint | undefined;
   const bucketCount = data?.[10]?.result as number | undefined;
+  const categoryRaw = data?.[11]?.result as `0x${string}` | undefined;
+  const disputed = data?.[12]?.result as boolean | undefined;
+  const resolvedAtBlock = data?.[13]?.result as bigint | undefined;
+  const disputeWindow = data?.[14]?.result as bigint | undefined;
+
+  const category = categoryRaw
+    ? hexToString(categoryRaw, { size: 32 }).replace(/\0+$/, "")
+    : undefined;
 
   const yesPool = publicYesPool ? Number(publicYesPool) / 1e6 : 0;
   const noPool = publicNoPool ? Number(publicNoPool) / 1e6 : 0;
@@ -59,6 +72,10 @@ export function useMarket(marketAddress: `0x${string}`, options?: UseMarketOptio
     oracle,
     marketId,
     bucketCount,
+    category,
+    disputed,
+    resolvedAtBlock,
+    disputeWindow,
     yesPool,
     noPool,
     totalPool,

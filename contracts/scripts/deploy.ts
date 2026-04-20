@@ -14,7 +14,7 @@ async function main() {
   }
 
   // ── 1. Deploy MockcUSDT ─────────────────────────────────────────────
-  console.log("\n1/5 Deploying MockcUSDT...");
+  console.log("\n1/6 Deploying MockcUSDT...");
   const MockcUSDT = await ethers.getContractFactory("MockcUSDT");
   const cUSDT = await MockcUSDT.deploy();
   await cUSDT.waitForDeployment();
@@ -22,7 +22,7 @@ async function main() {
   console.log("   MockcUSDT deployed to:", cUSDTAddr);
 
   // ── 2. Deploy OracleMock ────────────────────────────────────────────
-  console.log("\n2/5 Deploying OracleMock...");
+  console.log("\n2/6 Deploying OracleMock...");
   const OracleMock = await ethers.getContractFactory("OracleMock");
   const oracle = await OracleMock.deploy(deployer.address);
   await oracle.waitForDeployment();
@@ -30,7 +30,7 @@ async function main() {
   console.log("   OracleMock deployed to:", oracleAddr);
 
   // ── 3. Deploy ReputationGate ────────────────────────────────────────
-  console.log("\n3/5 Deploying ReputationGate...");
+  console.log("\n3/6 Deploying ReputationGate...");
   const ReputationGate = await ethers.getContractFactory("ReputationGate");
   const reputation = await ReputationGate.deploy(deployer.address);
   await reputation.waitForDeployment();
@@ -38,14 +38,22 @@ async function main() {
   console.log("   ReputationGate deployed to:", reputationAddr);
 
   // ── 4. Deploy NullCastFactory ───────────────────────────────────────
-  console.log("\n4/5 Deploying NullCastFactory...");
+  console.log("\n4/6 Deploying NullCastFactory...");
   const NullCastFactory = await ethers.getContractFactory("NullCastFactory");
   const factory = await NullCastFactory.deploy(cUSDTAddr, oracleAddr, deployer.address, reputationAddr);
   await factory.waitForDeployment();
   const factoryAddr = await factory.getAddress();
   console.log("   NullCastFactory deployed to:", factoryAddr);
 
-  // ── 5. Save deployment addresses ────────────────────────────────────
+  // ── 5. Deploy VaultFactory ───────────────────────────────────────────
+  console.log("\n5/6 Deploying VaultFactory...");
+  const VaultFactory = await ethers.getContractFactory("VaultFactory");
+  const vaultFactory = await VaultFactory.deploy(cUSDTAddr, deployer.address);
+  await vaultFactory.waitForDeployment();
+  const vaultFactoryAddr = await vaultFactory.getAddress();
+  console.log("   VaultFactory deployed to:", vaultFactoryAddr);
+
+  // ── 6. Save deployment addresses ────────────────────────────────────
   const deployment = {
     network: "sepolia",
     chainId: 11155111,
@@ -56,6 +64,7 @@ async function main() {
       OracleMock: oracleAddr,
       ReputationGate: reputationAddr,
       NullCastFactory: factoryAddr,
+      VaultFactory: vaultFactoryAddr,
     },
   };
 
@@ -69,7 +78,7 @@ async function main() {
     JSON.stringify(deployment, null, 2)
   );
 
-  console.log("\n5/5 Deployment addresses saved to deployments/sepolia.json");
+  console.log("\n6/6 Deployment addresses saved to deployments/sepolia.json");
   console.log("\n════════════════════════════════════════════");
   console.log("  NullCast Sepolia Deployment Complete");
   console.log("════════════════════════════════════════════");
@@ -77,6 +86,7 @@ async function main() {
   console.log("  OracleMock:       ", oracleAddr);
   console.log("  ReputationGate:   ", reputationAddr);
   console.log("  NullCastFactory:  ", factoryAddr);
+  console.log("  VaultFactory:     ", vaultFactoryAddr);
   console.log("════════════════════════════════════════════\n");
 }
 

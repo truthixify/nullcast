@@ -16,6 +16,7 @@ import {
 
 const STATUS_OPTIONS = ["Open", "Resolved", "All"] as const;
 const SORT_OPTIONS = ["Volume", "Newest", "Expiry"] as const;
+const CATEGORY_OPTIONS = ["All", "CRYPTO", "MACRO", "EQUITY", "SPORTS", "TECH", "OTHER"] as const;
 
 const STATUS_MAP: Record<string, number | null> = {
   Open: 0,
@@ -56,6 +57,7 @@ function MarketCard({ address, onClick }: { address: `0x${string}`; onClick: () 
     totalPool,
     yesOdds,
     noOdds,
+    category,
     isLoading,
   } = useMarket(address);
 
@@ -98,6 +100,11 @@ function MarketCard({ address, onClick }: { address: `0x${string}`; onClick: () 
       <div className="row between" style={{ marginBottom: 12 }}>
         <div className="row gap-2">
           <span className="pill cat">{typeLabel}</span>
+          {category && (
+            <span className="pill" style={{ fontSize: 10, textTransform: "uppercase" }}>
+              {category}
+            </span>
+          )}
           <span className="mono" style={{ fontSize: 11, color: "var(--t-3)" }}>
             Block {expiryBlock ? expiryBlock.toString() : "---"}
           </span>
@@ -131,10 +138,10 @@ function MarketFilterData({
   children,
 }: {
   address: `0x${string}`;
-  children: (data: { status: number | undefined; question: string | undefined }) => React.ReactNode;
+  children: (data: { status: number | undefined; question: string | undefined; category: string | undefined }) => React.ReactNode;
 }) {
-  const { status, question } = useMarket(address);
-  return <>{children({ status, question })}</>;
+  const { status, question, category } = useMarket(address);
+  return <>{children({ status, question, category })}</>;
 }
 
 /* ── MarketsPage ──────────────────────────────────────────── */
@@ -145,6 +152,7 @@ export default function MarketsPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("Open");
   const [sort, setSort] = useState("Volume");
+  const [categoryFilter, setCategoryFilter] = useState<typeof CATEGORY_OPTIONS[number]>("All");
 
   return (
     <div className="container page">
@@ -168,7 +176,7 @@ export default function MarketsPage() {
       </div>
 
       {/* Filter bar */}
-      <div className="card" style={{ padding: 12, marginBottom: 24 }}>
+      <div className="card" style={{ padding: 12, marginBottom: 12 }}>
         <div className="row gap-4" style={{ flexWrap: "wrap" }}>
           {/* search */}
           <div className="input-row" style={{ width: 240, flexShrink: 0 }}>
@@ -219,6 +227,21 @@ export default function MarketsPage() {
         </div>
       </div>
 
+      {/* Category filter chips */}
+      <div className="row gap-2" style={{ marginBottom: 24, flexWrap: "wrap" }}>
+        {CATEGORY_OPTIONS.map((cat) => (
+          <button
+            key={cat}
+            type="button"
+            className={`btn sm ${categoryFilter === cat ? "primary" : "ghost"}`}
+            onClick={() => setCategoryFilter(cat)}
+            style={{ fontSize: 12 }}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
       {/* Loading skeletons */}
       {isLoading && (
         <div className="grid-3">
@@ -241,7 +264,7 @@ export default function MarketsPage() {
         <div className="grid-3">
           {allMarkets.map((address, index) => (
             <MarketFilterData key={address} address={address}>
-              {({ status: mStatus, question }) => {
+              {({ status: mStatus, question, category: mCategory }) => {
                 const statusFilter = STATUS_MAP[status];
 
                 if (statusFilter !== null && mStatus !== undefined && mStatus !== statusFilter) {
@@ -252,6 +275,14 @@ export default function MarketsPage() {
                   search &&
                   question &&
                   !question.toLowerCase().includes(search.toLowerCase())
+                ) {
+                  return null;
+                }
+
+                if (
+                  categoryFilter !== "All" &&
+                  mCategory &&
+                  mCategory.toUpperCase() !== categoryFilter
                 ) {
                   return null;
                 }

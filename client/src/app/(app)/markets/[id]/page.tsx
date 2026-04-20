@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useAccount, useReadContract } from "wagmi";
+import { useAccount, useReadContract, useBlockNumber, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import {
   LockIcon,
   FHEBadge,
@@ -21,7 +21,7 @@ import { useApproveCUSDT } from "@/hooks/useCUSDT";
 import { useFHEEncrypt } from "@/hooks/useFHEVM";
 import { useOddsKeeper } from "@/hooks/useOddsKeeper";
 import { useUserDecrypt } from "@/hooks/useUserDecrypt";
-import { nullCastFactoryConfig } from "@/lib/contracts";
+import { nullCastFactoryConfig, getMarketConfig } from "@/lib/contracts";
 import { CONTRACT_ADDRESSES } from "@/constants/addresses";
 import { useNullCastStore } from "@/lib/store";
 
@@ -162,6 +162,33 @@ export default function MarketDetailPage({
   const fhe = useFHEEncrypt();
   const oddsKeeper = useOddsKeeper(hasAddress ? resolvedAddress : zeroAddr);
   const userDecrypt = useUserDecrypt(hasAddress ? resolvedAddress : zeroAddr);
+
+  /* ── Current block for dispute window countdown ──────────────── */
+  const { data: currentBlock } = useBlockNumber({
+    watch: market.status === 3,
+  });
+
+  /* ── Dispute hooks ──────────────────────────────────────────── */
+  const marketConfig = hasAddress ? getMarketConfig(resolvedAddress) : null;
+  const {
+    writeContract: writeDispute,
+    data: disputeHash,
+    isPending: isDisputeWriting,
+    error: disputeWriteError,
+  } = useWriteContract();
+  const {
+    isLoading: isDisputeConfirming,
+    isSuccess: isDisputeConfirmed,
+    error: disputeConfirmError,
+  } = useWaitForTransactionReceipt({ hash: disputeHash });
+
+  const handleRaiseDispute = useCallback(() => {
+    if (!marketConfig) return;
+    writeDispute({
+      ...marketConfig,
+      functionName: "raiseDispute",
+    });
+  }, [marketConfig, writeDispute]);
 
   /* ── Zustand store ───────────────────────────────────────────── */
   const addPosition = useNullCastStore((s) => s.addPosition);
@@ -374,6 +401,10 @@ export default function MarketDetailPage({
       label: "Market type",
       value: MARKET_TYPE_LABELS[market.marketType ?? 0] ?? "Binary",
     },
+    {
+      label: "Category",
+      value: market.category || "--",
+    },
     { label: "Fee", value: "0%" },
     {
       label: "Min bet",
@@ -438,10 +469,16 @@ export default function MarketDetailPage({
             <Pill variant="cat">
               {MARKET_TYPE_LABELS[market.marketType ?? 0] ?? "Binary"}
             </Pill>
+            {market.category && (
+              <Pill>{market.category}</Pill>
+            )}
             {market.status !== undefined && (
               <Pill variant={STATUS_PILL[market.status] ?? ""}>
                 {STATUS_LABELS[market.status] ?? "UNKNOWN"}
               </Pill>
+            )}
+            {market.disputed && (
+              <Pill variant="cancelled">DISPUTED</Pill>
             )}
             <FHEBadge />
             {market.expiryBlock && (
@@ -676,6 +713,111 @@ export default function MarketDetailPage({
               </div>
             </div>
           )}
+
+          {/* ── Dispute window card (shown when market is resolved) ── */}
+          {isMarketResolved && (() => {
+            const resolvedAt = market.resolvedAtBlock;
+            const window = market.disputeWindow;
+            const isDisputed = market.disputed || isDisputeConfirmed;
+
+            if (!resolvedAt || !window) return null;
+
+            const deadline = resolvedAt + window;
+            const blocksRemaining = currentBlock
+              ? Number(deadline) - Number(currentBlock)
+              : null;
+            const windowOpen = blocksRemaining !== null && blocksRemaining > 0;
+
+            return (
+              <div className="card" style={{ marginBottom: 16 }}>
+                <div className="card-head">
+                  <span>Dispute window</span>
+                  {isDisputed && (
+                    <span className="pill" style={{ background: "var(--no-bg)", color: "var(--no-hi)", borderColor: "var(--no-bd)" }}>
+                      Under dispute
+                    </span>
+                  )}
+                </div>
+                <div className="card-body">
+                  {isDisputed ? (
+                    <div style={{ textAlign: "center", padding: "8px 0" }}>
+                      <p style={{ fontSize: 13, color: "var(--no-hi)", fontWeight: 500, marginBottom: 4 }}>
+                        This market has been disputed
+                      </p>
+                      <p style={{ fontSize: 12, color: "var(--t-3)", margin: 0 }}>
+                        Resolution is under review by the oracle.
+                      </p>
+                    </div>
+                  ) : windowOpen ? (
+                    <div>
+                      <div className="row between" style={{ marginBottom: 12, fontSize: 13 }}>
+                        <span style={{ color: "var(--t-3)" }}>Blocks remaining</span>
+                        <span className="mono" style={{ color: "var(--t-1)", fontWeight: 600 }}>
+                          {blocksRemaining!.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="row between" style={{ marginBottom: 12, fontSize: 12 }}>
+                        <span style={{ color: "var(--t-4)" }}>Deadline block</span>
+                        <span className="mono" style={{ color: "var(--t-3)" }}>
+                          #{deadline.toString()}
+                        </span>
+                      </div>
+                      {/* Progress bar */}
+                      <div style={{
+                        width: "100%",
+                        height: 4,
+                        background: "var(--border-1)",
+                        borderRadius: 2,
+                        marginBottom: 14,
+                        overflow: "hidden",
+                      }}>
+                        <div style={{
+                          width: `${Math.max(0, Math.min(100, ((Number(window) - blocksRemaining!) / Number(window)) * 100))}%`,
+                          height: "100%",
+                          background: "var(--acc)",
+                          borderRadius: 2,
+                          transition: "width 0.3s ease",
+                        }} />
+                      </div>
+                      {isConnected && (
+                        <button
+                          className="btn secondary block"
+                          type="button"
+                          onClick={handleRaiseDispute}
+                          disabled={isDisputeWriting || isDisputeConfirming}
+                        >
+                          {isDisputeWriting
+                            ? "Confirm in wallet..."
+                            : isDisputeConfirming
+                              ? "Confirming..."
+                              : "Raise Dispute"}
+                        </button>
+                      )}
+                      {(disputeWriteError || disputeConfirmError) && (
+                        <p
+                          className="mono"
+                          style={{
+                            fontSize: 11,
+                            color: "var(--no)",
+                            marginTop: 8,
+                            wordBreak: "break-all",
+                          }}
+                        >
+                          {(disputeWriteError || disputeConfirmError)?.message}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: "center", padding: "8px 0" }}>
+                      <p style={{ fontSize: 13, color: "var(--t-3)", margin: 0 }}>
+                        Dispute window closed
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ── Betting panel (only when not resolved) ─────────── */}
           {!isMarketResolved && (

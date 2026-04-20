@@ -259,7 +259,7 @@ export const LogoFull = ({ size = 28 }: { size?: number }) => (
         color: "var(--t-1)",
       }}
     >
-      nullcast
+      NullCast
     </span>
   </div>
 );
