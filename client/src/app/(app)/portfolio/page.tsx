@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useAccount } from "wagmi";
 import { useFactoryMarkets } from "@/hooks/useFactory";
 import { useMarket, useHasPosition } from "@/hooks/useMarket";
 import { useClaimWinnings } from "@/hooks/useClaimWinnings";
+import { useUserDecrypt as __useUserDecrypt } from "@/hooks/useUserDecrypt";
 import { useNullCastStore } from "@/lib/store";
 import {
   LockIcon,
@@ -48,9 +49,11 @@ function Stat({
 /* ── Single position row (reads market data via hook) ────────── */
 function PositionRow({
   marketAddress,
+  autoDecrypt,
 }: {
   marketAddress: `0x${string}`;
   userAddress: `0x${string}`;
+  autoDecrypt?: boolean;
 }) {
   const {
     question,
@@ -63,68 +66,120 @@ function PositionRow({
     s.positions.find((p) => p.marketAddress === marketAddress)
   );
 
+  // Decrypt support
+  const { decrypt, isDecrypting, yesAmount, noAmount, isDecrypted } =
+    __useUserDecrypt(marketAddress);
+
+  const triggered = React.useRef(false);
+  React.useEffect(() => {
+    if (autoDecrypt && !isDecrypted && !isDecrypting && !triggered.current) {
+      triggered.current = true;
+      decrypt();
+    }
+  }, [autoDecrypt, isDecrypted, isDecrypting, decrypt]);
+
+  const decryptState: "hidden" | "decrypting" | "revealed" = isDecrypted
+    ? "revealed"
+    : isDecrypting
+      ? "decrypting"
+      : "hidden";
+
+  const yesAmt = yesAmount ? (Number(yesAmount) / 1e6).toFixed(2) : null;
+  const noAmt = noAmount ? (Number(noAmount) / 1e6).toFixed(2) : null;
+  const hasYes = yesAmount && yesAmount > BigInt(0);
+  const hasNo = noAmount && noAmount > BigInt(0);
+
   const isResolved = status === 2;
   const statusLabel = status !== undefined ? MarketStatus[status] ?? "UNKNOWN" : "...";
   const delta = yesOdds !== undefined ? yesOdds - 50 : 0;
 
+  const marketCell = (rowSpan?: number) => (
+    <td rowSpan={rowSpan}>
+      <div style={{ fontWeight: 500, color: "var(--t-1)" }}>
+        {isMarketLoading ? "Loading..." : question ?? "Unknown market"}
+      </div>
+      <span className="mono" style={{ fontSize: 11, color: "var(--t-4)" }}>
+        {marketAddress.slice(0, 6)}...{marketAddress.slice(-4)}
+      </span>
+    </td>
+  );
+
+  const oddsCell = (rowSpan?: number) => (
+    <td rowSpan={rowSpan}>
+      <span className="mono" style={{ fontSize: 13, color: "var(--t-2)" }}>
+        {isMarketLoading ? "..." : `${yesOdds}%`}
+      </span>
+    </td>
+  );
+
+  const deltaCell = (rowSpan?: number) => (
+    <td rowSpan={rowSpan}>
+      {!isMarketLoading && (
+        <span className="row gap-2 mono" style={{ fontSize: 13, color: delta > 0 ? "var(--yes-hi)" : delta < 0 ? "var(--no-hi)" : "var(--t-3)" }}>
+          {delta > 0 ? <ArrowUpIcon size={12} /> : delta < 0 ? <ArrowDownIcon size={12} /> : null}
+          {delta > 0 ? "+" : ""}{delta}%
+        </span>
+      )}
+    </td>
+  );
+
+  const statusCell = (rowSpan?: number) => (
+    <td rowSpan={rowSpan}>
+      <span className={`pill ${statusLabel === "OPEN" ? "open" : statusLabel === "RESOLVED" ? "resolved" : ""}`}>
+        {statusLabel}
+      </span>
+    </td>
+  );
+
+  const actionCell = (rowSpan?: number) => (
+    <td rowSpan={rowSpan}>{isResolved ? <ClaimButton marketAddress={marketAddress} /> : null}</td>
+  );
+
+  // If decrypted and has BOTH sides, show 2 rows
+  if (isDecrypted && hasYes && hasNo) {
+    return (
+      <>
+        <tr>
+          {marketCell(2)}
+          <td><span className="pill yes">YES</span></td>
+          <td><span className="enc-val"><span className="reveal num">{yesAmt}</span> <span style={{color:"var(--t-3)",fontFamily:"var(--f-mono)",fontSize:12}}>cUSDT</span></span></td>
+          {oddsCell(2)}
+          {deltaCell(2)}
+          {statusCell(2)}
+          {actionCell(2)}
+        </tr>
+        <tr>
+          <td><span className="pill no">NO</span></td>
+          <td><span className="enc-val"><span className="reveal num">{noAmt}</span> <span style={{color:"var(--t-3)",fontFamily:"var(--f-mono)",fontSize:12}}>cUSDT</span></span></td>
+        </tr>
+      </>
+    );
+  }
+
+  // Single row — either not decrypted or only one side
+  const sideLabel = isDecrypted
+    ? (hasYes ? "YES" : hasNo ? "NO" : storePosition?.side ?? "--")
+    : (storePosition?.side ?? "--");
+  const sideClass = sideLabel === "YES" ? "yes" : sideLabel === "NO" ? "no" : "";
+  const displayAmount = isDecrypted ? (hasYes ? yesAmt : noAmt) ?? "0.00" : "0.00";
+
   return (
     <tr>
+      {marketCell()}
       <td>
-        <div style={{ fontWeight: 500, color: "var(--t-1)" }}>
-          {isMarketLoading ? "Loading..." : question ?? "Unknown market"}
-        </div>
-        <span className="mono" style={{ fontSize: 11, color: "var(--t-4)" }}>
-          {marketAddress.slice(0, 6)}...{marketAddress.slice(-4)}
-        </span>
-      </td>
-      <td>
-        {storePosition ? (
-          <span className={`pill ${storePosition.side === "YES" ? "yes" : "no"}`}>
-            {storePosition.side}
-          </span>
+        {sideLabel !== "--" ? (
+          <span className={`pill ${sideClass}`}>{sideLabel}</span>
         ) : (
           <span style={{ color: "var(--t-4)" }}>--</span>
         )}
       </td>
       <td>
-        <EncryptedValue state="hidden" unit="cUSDT" compact />
+        <EncryptedValue state={decryptState} value={displayAmount} onDecrypt={decrypt} unit="cUSDT" compact />
       </td>
-      <td>
-        <span className="mono" style={{ fontSize: 13, color: "var(--t-2)" }}>
-          {isMarketLoading ? "..." : `${yesOdds}%`}
-        </span>
-      </td>
-      <td>
-        {!isMarketLoading && (
-          <span
-            className="row gap-2 mono"
-            style={{
-              fontSize: 13,
-              color: delta > 0 ? "var(--yes-hi)" : delta < 0 ? "var(--no-hi)" : "var(--t-3)",
-            }}
-          >
-            {delta > 0 ? (
-              <ArrowUpIcon size={12} />
-            ) : delta < 0 ? (
-              <ArrowDownIcon size={12} />
-            ) : null}
-            {delta > 0 ? "+" : ""}
-            {delta}%
-          </span>
-        )}
-      </td>
-      <td>
-        <span
-          className={`pill ${statusLabel === "OPEN" ? "open" : statusLabel === "RESOLVED" ? "resolved" : ""}`}
-        >
-          {statusLabel}
-        </span>
-      </td>
-      <td>
-        {isResolved ? (
-          <ClaimButton marketAddress={marketAddress} />
-        ) : null}
-      </td>
+      {oddsCell()}
+      {deltaCell()}
+      {statusCell()}
+      {actionCell()}
     </tr>
   );
 }
@@ -162,14 +217,16 @@ function ClaimButton({ marketAddress }: { marketAddress: `0x${string}` }) {
 function MarketPositionCheck({
   marketAddress,
   userAddress,
+  autoDecrypt,
 }: {
   marketAddress: `0x${string}`;
   userAddress: `0x${string}`;
+  autoDecrypt?: boolean;
 }) {
   const hasPos = useHasPosition(marketAddress, userAddress);
 
   if (hasPos === true) {
-    return <PositionRow marketAddress={marketAddress} userAddress={userAddress} />;
+    return <PositionRow marketAddress={marketAddress} userAddress={userAddress} autoDecrypt={autoDecrypt} />;
   }
 
   return null;
@@ -182,6 +239,7 @@ export default function PortfolioPage() {
   const storePositions = useNullCastStore((s) => s.positions);
 
   const [activeTab, setActiveTab] = useState<"active" | "settled" | "lp">("active");
+  const [decryptAll, setDecryptAll] = useState(false);
 
   // Not connected
   if (!isConnected || !address) {
@@ -232,9 +290,9 @@ export default function PortfolioPage() {
               Your positions are encrypted. Only you can decrypt them.
             </p>
           </div>
-          <button className="btn secondary">
+          <button className="btn secondary" onClick={() => setDecryptAll(true)} disabled={decryptAll}>
             <LockOpenIcon size={14} />
-            Decrypt all
+            {decryptAll ? "Decrypting…" : "Decrypt all"}
           </button>
         </div>
 
@@ -260,17 +318,19 @@ export default function PortfolioPage() {
           <div
             style={{
               display: "flex",
-              gap: 4,
-              padding: "8px 16px 0",
+              gap: 6,
+              padding: "12px 16px",
               borderBottom: "1px solid var(--border-1)",
             }}
           >
             {tabs.map((t) => (
               <button
                 key={t.key}
-                className={`btn sm ${activeTab === t.key ? "primary" : "ghost"}`}
+                className={`btn sm ${activeTab === t.key ? "secondary" : "ghost"}`}
                 onClick={() => setActiveTab(t.key)}
-                style={{ marginBottom: -1 }}
+                style={{
+                  borderColor: activeTab === t.key ? "var(--border-3)" : undefined,
+                }}
               >
                 {t.label}
               </button>
@@ -333,6 +393,7 @@ export default function PortfolioPage() {
                         key={addr}
                         marketAddress={addr}
                         userAddress={address}
+                        autoDecrypt={decryptAll}
                       />
                     ))}
                   </tbody>
