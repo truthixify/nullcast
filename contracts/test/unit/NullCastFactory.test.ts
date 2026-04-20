@@ -13,7 +13,8 @@ describe("NullCastFactory", function () {
     const factory = await NullCastFactory.deploy(
       await cUSDT.getAddress(),
       oracle.address,
-      owner.address
+      owner.address,
+      ethers.ZeroAddress // no reputation gate
     );
     await factory.waitForDeployment();
 
@@ -34,7 +35,7 @@ describe("NullCastFactory", function () {
       const [owner, oracle] = await ethers.getSigners();
       const NullCastFactory = await ethers.getContractFactory("NullCastFactory");
       await expect(
-        NullCastFactory.deploy(ethers.ZeroAddress, oracle.address, owner.address)
+        NullCastFactory.deploy(ethers.ZeroAddress, oracle.address, owner.address, ethers.ZeroAddress)
       ).to.be.revertedWithCustomError(NullCastFactory, "ZeroAddress");
     });
 
@@ -44,7 +45,7 @@ describe("NullCastFactory", function () {
       const cUSDT = await MockcUSDT.deploy();
       const NullCastFactory = await ethers.getContractFactory("NullCastFactory");
       await expect(
-        NullCastFactory.deploy(await cUSDT.getAddress(), ethers.ZeroAddress, owner.address)
+        NullCastFactory.deploy(await cUSDT.getAddress(), ethers.ZeroAddress, owner.address, ethers.ZeroAddress)
       ).to.be.revertedWithCustomError(NullCastFactory, "ZeroAddress");
     });
   });

@@ -27,7 +27,8 @@ describe("Scalar Market Lifecycle", function () {
       oracle.address,
       owner.address,
       cUSDTAddr,
-      3 // 3 buckets
+      3, // 3 buckets
+      ethers.ZeroAddress // no reputation gate
     );
     await market.waitForDeployment();
     const marketAddr = await market.getAddress();
@@ -112,7 +113,7 @@ describe("Scalar Market Lifecycle", function () {
     const NullCastMarket = await ethers.getContractFactory("NullCastMarket");
     const market = await NullCastMarket.deploy(
       0, "Binary market", currentBlock + 1000, 1_000_000,
-      oracle.address, owner.address, await cUSDT.getAddress(), 0
+      oracle.address, owner.address, await cUSDT.getAddress(), 0, ethers.ZeroAddress
     );
     await market.waitForDeployment();
 
@@ -138,7 +139,7 @@ describe("Scalar Market Lifecycle", function () {
     const NullCastMarket = await ethers.getContractFactory("NullCastMarket");
     const market = await NullCastMarket.deploy(
       0, "Scalar market", currentBlock + 1000, 1_000_000,
-      oracle.address, owner.address, await cUSDT.getAddress(), 3
+      oracle.address, owner.address, await cUSDT.getAddress(), 3, ethers.ZeroAddress
     );
     await market.waitForDeployment();
 
@@ -164,7 +165,7 @@ describe("Scalar Market Lifecycle", function () {
     const NullCastMarket = await ethers.getContractFactory("NullCastMarket");
     const market = await NullCastMarket.deploy(
       0, "Scalar", currentBlock + 1000, 1_000_000,
-      oracle.address, owner.address, await cUSDT.getAddress(), 3
+      oracle.address, owner.address, await cUSDT.getAddress(), 3, ethers.ZeroAddress
     );
     await market.waitForDeployment();
     const marketAddr = await market.getAddress();

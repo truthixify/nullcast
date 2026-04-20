@@ -35,6 +35,7 @@ contract NullCastFactory is Ownable, Pausable {
     uint256 public marketCount;
     address public cUSDT;
     address public oracleAddress;
+    address public reputationGate;
 
     // ── Constructor ────────────────────────────────────────────────────────
 
@@ -43,17 +44,20 @@ contract NullCastFactory is Ownable, Pausable {
      * @param _cUSDT Address of the confidential USDT contract
      * @param _oracle Default oracle address for new markets
      * @param _owner Factory owner with pause authority
+     * @param _reputationGate Address of ReputationGate contract (address(0) for no gate)
      */
     constructor(
         address _cUSDT,
         address _oracle,
-        address _owner
+        address _owner,
+        address _reputationGate
     ) Ownable(_owner) {
         if (_cUSDT == address(0)) revert ZeroAddress();
         if (_oracle == address(0)) revert ZeroAddress();
 
         cUSDT = _cUSDT;
         oracleAddress = _oracle;
+        reputationGate = _reputationGate;
     }
 
     // ── Core Functions ─────────────────────────────────────────────────────
@@ -95,7 +99,8 @@ contract NullCastFactory is Ownable, Pausable {
             oracleAddress,
             owner(),
             cUSDT,
-            _bucketCount
+            _bucketCount,
+            reputationGate
         );
 
         marketAddress = address(market);
@@ -160,5 +165,13 @@ contract NullCastFactory is Ownable, Pausable {
     function setCUSDT(address _cUSDT) external onlyOwner {
         if (_cUSDT == address(0)) revert ZeroAddress();
         cUSDT = _cUSDT;
+    }
+
+    /**
+     * @notice Update the reputation gate address
+     * @param _gate New ReputationGate address (address(0) to disable)
+     */
+    function setReputationGate(address _gate) external onlyOwner {
+        reputationGate = _gate;
     }
 }

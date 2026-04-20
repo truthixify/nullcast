@@ -21,7 +21,7 @@ describe("Full Market Lifecycle Integration", function () {
     const oracleAddr = await oracle.getAddress();
 
     const NullCastFactory = await ethers.getContractFactory("NullCastFactory");
-    const factory = await NullCastFactory.deploy(cUSDTAddr, oracleAddr, owner.address);
+    const factory = await NullCastFactory.deploy(cUSDTAddr, oracleAddr, owner.address, ethers.ZeroAddress);
     await factory.waitForDeployment();
 
     // ── 2. Create a market via factory ─────────────────────────────
@@ -157,7 +157,8 @@ describe("Full Market Lifecycle Integration", function () {
     const factory = await NullCastFactory.deploy(
       cUSDTAddr,
       await oracle.getAddress(),
-      owner.address
+      owner.address,
+      ethers.ZeroAddress
     );
     await factory.waitForDeployment();
 

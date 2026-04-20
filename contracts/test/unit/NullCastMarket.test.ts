@@ -34,7 +34,8 @@ describe("NullCastMarket", function () {
       oracle.address,
       owner.address,
       await cUSDT.getAddress(),
-      0 // binary market
+      0, // binary market
+      ethers.ZeroAddress // no reputation gate
     );
     await marketContract.waitForDeployment();
 
@@ -112,7 +113,8 @@ describe("NullCastMarket", function () {
           ethers.ZeroAddress,
           owner.address,
           await cUSDT.getAddress(),
-          0
+          0,
+          ethers.ZeroAddress
         )
       ).to.be.revertedWithCustomError(NullCastMarket, "ZeroAddress");
     });
@@ -132,7 +134,8 @@ describe("NullCastMarket", function () {
           oracle.address,
           ethers.ZeroAddress,
           await cUSDT.getAddress(),
-          0
+          0,
+          ethers.ZeroAddress
         )
       ).to.be.revertedWithCustomError(NullCastMarket, "ZeroAddress");
     });
@@ -149,7 +152,8 @@ describe("NullCastMarket", function () {
           oracle.address,
           owner.address,
           ethers.ZeroAddress,
-          0
+          0,
+          ethers.ZeroAddress
         )
       ).to.be.revertedWithCustomError(NullCastMarket, "ZeroAddress");
     });

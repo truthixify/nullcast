@@ -6,6 +6,7 @@ import "@fhevm/solidity/config/ZamaConfig.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/IConfidentialERC20.sol";
+import "./interfaces/IReputationGate.sol";
 
 /**
  * @title NullCastMarket
@@ -113,6 +114,9 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
     /// @dev cUSDT token used for betting
     IConfidentialERC20 public cUSDT;
 
+    /// @dev Optional reputation gate for participation tracking
+    IReputationGate public reputationGate;
+
     // ── Modifiers ──────────────────────────────────────────────────────────
 
     modifier onlyOpen() {
@@ -176,6 +180,7 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
      * @param _owner Address with pause/cancel authority
      * @param _cUSDT Address of the confidential USDT contract
      * @param _bucketCount Number of buckets for scalar markets (0 = binary)
+     * @param _reputationGate Address of ReputationGate contract (address(0) for no gate)
      */
     constructor(
         uint256 _marketId,
@@ -185,7 +190,8 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
         address _oracle,
         address _owner,
         address _cUSDT,
-        uint8 _bucketCount
+        uint8 _bucketCount,
+        address _reputationGate
     ) {
         if (_oracle == address(0)) revert ZeroAddress();
         if (_owner == address(0)) revert ZeroAddress();
@@ -206,6 +212,10 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
             bucketCount = _bucketCount;
         } else {
             marketType = MarketType.BINARY;
+        }
+
+        if (_reputationGate != address(0)) {
+            reputationGate = IReputationGate(_reputationGate);
         }
     }
 
@@ -248,6 +258,11 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
 
         // Track user's position
         _hasPosition[msg.sender] = true;
+
+        // Track participation for reputation scoring
+        if (address(reputationGate) != address(0)) {
+            reputationGate.recordParticipation(msg.sender);
+        }
 
         if (isYes) {
             // Encrypted: add to user's YES position
@@ -329,6 +344,11 @@ contract NullCastMarket is ZamaEthereumConfig, Pausable, ReentrancyGuard {
         cUSDT.transferFrom(msg.sender, address(this), validAmount);
 
         _hasPosition[msg.sender] = true;
+
+        // Track participation for reputation scoring
+        if (address(reputationGate) != address(0)) {
+            reputationGate.recordParticipation(msg.sender);
+        }
 
         // Encrypted: update user's bucket position
         if (FHE.isInitialized(_userBucketPositions[msg.sender][bucketId])) {

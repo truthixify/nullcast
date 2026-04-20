@@ -171,6 +171,33 @@ FHE.makePubliclyDecryptable(totalYesPool);
 createMarket() → OPEN → placeBet() → EXPIRED → resolveMarket() → RESOLVED → claimWinnings()
 ```
 
+### Reputation & Tiers
+
+Reputation scores are encrypted on-chain (`euint8`, 0-100), computed by a protocol keeper from on-chain signals:
+
+| Input | Weight | Source |
+|---|---|---|
+| Wallet age | 40pts max | Block history |
+| Transaction count | 40pts max | On-chain activity |
+| NullCast participation | 20pts max | Auto-tracked per bet |
+
+Scores decay at 5 points per 7-day epoch of inactivity.
+
+**Tier system** — derived from threshold checks (`meetsThreshold`), not the raw score:
+
+| Tier | Threshold | Access |
+|---|---|---|
+| Oracle | ≥ 80 | Top-tier markets, max position sizes |
+| Strategist | ≥ 60 | High-stakes markets |
+| Analyst | ≥ 40 | Standard markets |
+| Explorer | ≥ 20 | Basic markets |
+
+Anyone can verify a user's tier via `meetsThreshold(user, threshold)` → returns encrypted boolean. The actual score is never revealed publicly — only the user can decrypt it.
+
+Participation is tracked automatically: `NullCastMarket.placeBet()` calls `ReputationGate.recordParticipation()` on every bet.
+
+**Keeper script:** `npx hardhat run scripts/computeScores.ts --network sepolia` computes scores for active users per epoch.
+
 ---
 
 ## Test Coverage
@@ -208,7 +235,8 @@ createMarket() → OPEN → placeBet() → EXPIRED → resolveMarket() → RESOL
 | Tailwind CSS | Utility styling |
 | RainbowKit | Wallet connection |
 | wagmi v2 + viem | Ethereum interaction |
-| Zustand | State management |
+| @zama-fhe/sdk | Client-side FHE encryption + user decryption |
+| Zustand | State management (persisted to localStorage) |
 
 ---
 

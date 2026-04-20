@@ -24,7 +24,8 @@ describe("OracleMock", function () {
       await oracle.getAddress(), // oracle is the resolver
       owner.address,
       await cUSDT.getAddress(),
-      0 // binary market
+      0, // binary market
+      ethers.ZeroAddress // no reputation gate
     );
     await market.waitForDeployment();
 

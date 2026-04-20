@@ -11,16 +11,21 @@ import {
   ExternalIcon,
 } from "@/components/shared/Icons";
 import { Pill } from "@/components/shared/Icons";
+import { TIERS, getTierFromScore } from "@/constants/tiers";
 
 /* ── ScoreRing ─────────────────────────────────────────────────── */
 function ScoreRing({
   state,
   score,
   participation,
+  tierName,
+  tierColor,
 }: {
   state: "hidden" | "decrypting" | "revealed";
   score: number;
   participation: number;
+  tierName: string | null;
+  tierColor: string | null;
 }) {
   const size = 220;
   const cx = size / 2;
@@ -116,7 +121,7 @@ function ScoreRing({
         <>
           <text
             x={cx}
-            y={cy - 6}
+            y={tierName ? cy - 16 : cy - 6}
             textAnchor="middle"
             dominantBaseline="central"
             style={{
@@ -130,7 +135,7 @@ function ScoreRing({
           </text>
           <text
             x={cx}
-            y={cy + 28}
+            y={tierName ? cy + 18 : cy + 28}
             textAnchor="middle"
             dominantBaseline="central"
             style={{
@@ -141,6 +146,22 @@ function ScoreRing({
           >
             / 100
           </text>
+          {tierName && (
+            <text
+              x={cx}
+              y={cy + 42}
+              textAnchor="middle"
+              dominantBaseline="central"
+              style={{
+                fontFamily: "var(--f-mono)",
+                fontSize: 14,
+                fontWeight: 600,
+                fill: tierColor ?? "var(--t-2)",
+              }}
+            >
+              {tierName}
+            </text>
+          )}
         </>
       )}
     </svg>
@@ -239,6 +260,9 @@ export default function ReputationPage() {
     : "Never";
 
   const eligibleMarkets = hasScore ? "All tiers" : "None";
+
+  const demoScore = 72;
+  const currentTier = scoreState === "revealed" && hasScore ? getTierFromScore(demoScore) : null;
 
   // Not connected
   if (!isConnected || !address) {
@@ -354,6 +378,7 @@ export default function ReputationPage() {
 
         {/* Main content */}
         {!isRepLoading && (
+          <>
           <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: 24 }}>
             {/* Left: score gauge */}
             <div className="card elevated">
@@ -370,8 +395,10 @@ export default function ReputationPage() {
 
                 <ScoreRing
                   state={scoreState}
-                  score={hasScore ? 72 : 0}
+                  score={hasScore ? demoScore : 0}
                   participation={participation}
+                  tierName={currentTier?.name ?? null}
+                  tierColor={currentTier?.color ?? null}
                 />
 
                 <button
@@ -447,6 +474,83 @@ export default function ReputationPage() {
               </div>
             </div>
           </div>
+
+          {/* Reputation Tiers */}
+          <div className="card" style={{ marginTop: 24 }}>
+            <div className="card-head">
+              <h3>Tiers</h3>
+            </div>
+            <div className="card-body" style={{ padding: 0 }}>
+              {TIERS.map((tier, i) => {
+                const isActive = currentTier?.name === tier.name;
+                return (
+                  <div
+                    key={tier.name}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 14,
+                      padding: "14px 20px",
+                      borderBottom: i < TIERS.length - 1 ? "1px solid var(--border-1)" : "none",
+                      background: isActive ? "var(--bg-2)" : "transparent",
+                    }}
+                  >
+                    {/* Colored dot */}
+                    <span
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: "50%",
+                        background: tier.color,
+                        flexShrink: 0,
+                        boxShadow: isActive ? `0 0 8px ${tier.color}` : "none",
+                      }}
+                    />
+                    {/* Tier name */}
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        fontSize: 14,
+                        color: isActive ? tier.color : "var(--t-1)",
+                        width: 100,
+                      }}
+                    >
+                      {tier.name}
+                    </span>
+                    {/* Threshold */}
+                    <span
+                      className="mono"
+                      style={{
+                        fontSize: 12,
+                        color: "var(--t-3)",
+                        width: 40,
+                      }}
+                    >
+                      {"\u2265"} {tier.threshold}
+                    </span>
+                    {/* Description */}
+                    <span
+                      style={{
+                        fontSize: 13,
+                        color: "var(--t-3)",
+                        flex: 1,
+                      }}
+                    >
+                      {tier.name === "Oracle" && "Top performers"}
+                      {tier.name === "Strategist" && "Proven track record"}
+                      {tier.name === "Analyst" && "Regular participant"}
+                      {tier.name === "Explorer" && "Basic activity"}
+                    </span>
+                    {/* Active indicator */}
+                    {isActive && (
+                      <Pill variant="acc">YOU</Pill>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          </>
         )}
       </div>
 
