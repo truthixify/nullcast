@@ -75,11 +75,11 @@ export function Sidebar() {
 
   return (
     <aside className="left-nav">
-      {/* Logo */}
-      <div className="brand-area">
+      {/* Logo — links to home */}
+      <Link href="/" className="brand-area" style={{ textDecoration: "none", color: "inherit" }}>
         <NullCastMark />
         <span className="brand-text">NullCast</span>
-      </div>
+      </Link>
 
       {/* Nav items */}
       <nav>
@@ -96,18 +96,6 @@ export function Sidebar() {
       </nav>
 
       <div style={{ flex: 1 }} />
-
-      {/* Search hint */}
-      <button
-        className="search-trigger"
-        type="button"
-        onClick={() => (window as unknown as { openCommandPalette?: () => void }).openCommandPalette?.()}
-      >
-        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <Icon name="search" size={12} /> Search
-        </span>
-        <span className="kbd">&#8984;K</span>
-      </button>
 
       {/* Account chip */}
       <div className="account-chip">
