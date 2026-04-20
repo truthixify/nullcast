@@ -166,12 +166,15 @@ function VaultCard({ address }: { address: `0x${string}` }) {
   }
 
   const isClosed = closed || isCloseClosed;
-  const totalDepositsDisplay = publicTotalDeposits
+  const followers = followerCount ? Number(followerCount) : 0;
+  const totalDepositsDisplay = publicTotalDeposits && Number(publicTotalDeposits) > 0
     ? (Number(publicTotalDeposits) / 1e6).toLocaleString(undefined, {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
-      })
-    : "0.00";
+      }) + " cUSDT"
+    : followers > 0
+      ? "Pending sync"
+      : "0.00 cUSDT";
 
   return (
     <div className="card" style={{ padding: 0 }}>
@@ -218,7 +221,7 @@ function VaultCard({ address }: { address: `0x${string}` }) {
           <div>
             <div className="eyebrow">Total deposits</div>
             <div className="mono" style={{ color: "var(--t-1)" }}>
-              {totalDepositsDisplay} cUSDT
+              {totalDepositsDisplay}
             </div>
           </div>
           <div>
@@ -386,6 +389,28 @@ export default function VaultsPage() {
   });
 
   const vaults = (allVaults as `0x${string}`[]) || [];
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const res = await fetch("/api/keeper");
+      const data = await res.json();
+      if (data.ok) {
+        const vaultUpdates = (data.vaults || []).filter((v: { action: string }) => v.action.includes("shares="));
+        setSyncMsg(vaultUpdates.length > 0 ? `Synced ${vaultUpdates.length} vault${vaultUpdates.length !== 1 ? "s" : ""}` : "No vaults to sync");
+      } else {
+        setSyncMsg(data.error || "Sync failed");
+      }
+    } catch {
+      setSyncMsg("Sync failed");
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncMsg(null), 4000);
+    }
+  };
 
   return (
     <div className="page">
@@ -395,13 +420,21 @@ export default function VaultsPage() {
           <div className="page-head" style={{ padding: 0 }}>
             <h1 style={{ fontSize: 36 }}>Vaults</h1>
             <p className="sub">
-              Follow top traders. Deposit into strategy vaults and copy-trade encrypted positions.
+              Follow top traders. Deposit and let managers trade on your behalf.
             </p>
           </div>
-          <Link href="/vaults/create" className="btn primary lg">
-            <IconPlus size={14} />
-            Create Vault
-          </Link>
+          <div className="row gap-2">
+            {syncMsg && (
+              <span className="mono" style={{ fontSize: 11, color: "var(--t-3)" }}>{syncMsg}</span>
+            )}
+            <button className="btn secondary sm" onClick={handleSync} disabled={syncing}>
+              {syncing ? "Syncing..." : "Sync totals"}
+            </button>
+            <Link href="/vaults/create" className="btn primary">
+              <IconPlus size={14} />
+              Create Vault
+            </Link>
+          </div>
         </div>
 
         {/* Loading */}
