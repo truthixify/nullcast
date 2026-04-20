@@ -21,6 +21,7 @@ import { usePlaceBet } from "@/hooks/usePlaceBet";
 import { useClaimWinnings } from "@/hooks/useClaimWinnings";
 import { useApproveCUSDT } from "@/hooks/useCUSDT";
 import { useFHEEncrypt } from "@/hooks/useFHEVM";
+import { useOddsKeeper } from "@/hooks/useOddsKeeper";
 import { nullCastFactoryConfig } from "@/lib/contracts";
 import { CONTRACT_ADDRESSES } from "@/constants/addresses";
 import { useNullCastStore } from "@/lib/store";
@@ -128,6 +129,7 @@ export default function MarketDetailPage({
   const claim = useClaimWinnings(hasAddress ? resolvedAddress : zeroAddr);
   const approveCUSDT = useApproveCUSDT();
   const fhe = useFHEEncrypt();
+  const oddsKeeper = useOddsKeeper(hasAddress ? resolvedAddress : zeroAddr);
 
   /* ── Zustand store ──────────────────────────────────────────── */
   const addPosition = useNullCastStore((s) => s.addPosition);
@@ -205,7 +207,7 @@ export default function MarketDetailPage({
   const isBetWriting = bet.isWriting;
   const isBetConfirming = bet.isConfirming;
 
-  // When bet is confirmed, track in Zustand
+  // When bet is confirmed, track in Zustand and trigger odds update
   if (isBetConfirmed && betStep === "confirming" && hasAddress && resolvedAddress) {
     addPosition({
       marketAddress: resolvedAddress,
@@ -216,6 +218,12 @@ export default function MarketDetailPage({
       txHash: bet.hash,
     });
     setBetStep("confirmed");
+
+    // Trigger odds keeper to decrypt and submit updated pool totals
+    oddsKeeper.updateOdds();
+
+    // Refetch market data after a short delay for the odds update tx to land
+    setTimeout(() => market.refetch(), 15_000);
   }
 
   /* ── Claim handler ──────────────────────────────────────────── */
@@ -440,19 +448,33 @@ export default function MarketDetailPage({
               >
                 Current Odds
               </span>
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  fontSize: "var(--text-xs)",
-                  color: "var(--color-accent-bright)",
-                  fontFamily: "var(--font-mono)",
-                }}
-              >
-                <span className="live-dot" />
-                Polling every 12s
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    fontSize: "var(--text-xs)",
+                    color: "var(--color-accent-bright)",
+                    fontFamily: "var(--font-mono)",
+                  }}
+                >
+                  <span className="live-dot" />
+                  Polling every 12s
+                </span>
+                <button
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => {
+                    oddsKeeper.updateOdds();
+                    setTimeout(() => market.refetch(), 15_000);
+                  }}
+                  disabled={oddsKeeper.isUpdating}
+                  type="button"
+                  style={{ fontSize: "11px", padding: "4px 10px" }}
+                >
+                  {oddsKeeper.isUpdating ? "Decrypting..." : "Refresh odds"}
+                </button>
+              </div>
             </div>
             <OddsBar
               yes={yesPct}
