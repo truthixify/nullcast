@@ -28,9 +28,10 @@ export function useMarket(marketAddress: `0x${string}`, options?: UseMarketOptio
       { ...config, functionName: "disputed" },
       { ...config, functionName: "resolvedAtBlock" },
       { ...config, functionName: "DISPUTE_WINDOW" },
+      { ...config, functionName: "liquidityPool" },
     ],
     query: {
-      refetchInterval: options?.refetchInterval,
+      refetchInterval: options?.refetchInterval ?? 10_000,
     },
   });
 
@@ -49,15 +50,27 @@ export function useMarket(marketAddress: `0x${string}`, options?: UseMarketOptio
   const disputed = data?.[12]?.result as boolean | undefined;
   const resolvedAtBlock = data?.[13]?.result as bigint | undefined;
   const disputeWindow = data?.[14]?.result as bigint | undefined;
+  const liquidityPoolAddr = data?.[15]?.result as string | undefined;
 
   const category = categoryRaw
     ? hexToString(categoryRaw, { size: 32 }).replace(/\0+$/, "")
     : undefined;
 
+  // Read LP pool total liquidity
+  const lpPoolAddress = liquidityPoolAddr && liquidityPoolAddr !== "0x0000000000000000000000000000000000000000" ? liquidityPoolAddr as `0x${string}` : undefined;
+  const { data: lpTotalLiquidity } = useReadContract({
+    address: lpPoolAddress,
+    abi: [{ inputs: [], name: "publicTotalLiquidity", outputs: [{ type: "uint256" }], stateMutability: "view", type: "function" }],
+    functionName: "publicTotalLiquidity",
+    query: { enabled: !!lpPoolAddress, refetchInterval: 10_000 },
+  });
+
   const yesPool = publicYesPool ? Number(publicYesPool) / 1e6 : 0;
   const noPool = publicNoPool ? Number(publicNoPool) / 1e6 : 0;
-  const totalPool = yesPool + noPool;
-  const yesOdds = totalPool > 0 ? Math.round((yesPool / totalPool) * 100) : 50;
+  const bettingPool = yesPool + noPool;
+  const lpPool = lpTotalLiquidity ? Number(lpTotalLiquidity) / 1e6 : 0;
+  const totalPool = bettingPool + lpPool;
+  const yesOdds = bettingPool > 0 ? Math.round((yesPool / bettingPool) * 100) : 50;
   const noOdds = 100 - yesOdds;
 
   return {
@@ -78,6 +91,7 @@ export function useMarket(marketAddress: `0x${string}`, options?: UseMarketOptio
     disputeWindow,
     yesPool,
     noPool,
+    lpPool,
     totalPool,
     yesOdds,
     noOdds,

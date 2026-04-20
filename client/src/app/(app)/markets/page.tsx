@@ -68,7 +68,7 @@ function MarketCard({
     yesOdds,
     noOdds,
     isLoading,
-  } = useMarket(address, { refetchInterval: 30_000 });
+  } = useMarket(address);
 
   if (isLoading) {
     return (
@@ -195,7 +195,7 @@ function MarketFilterData({
     category: string | undefined;
   }) => React.ReactNode;
 }) {
-  const { status, question, category } = useMarket(address, { refetchInterval: 30_000 });
+  const { status, question, category } = useMarket(address);
   return <>{children({ status, question, category })}</>;
 }
 
