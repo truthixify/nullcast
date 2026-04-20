@@ -6,6 +6,8 @@ import { useReadContract } from "wagmi";
 import { Icon } from "@/components/shared/Icons";
 import { PulseDot } from "@/components/shared/PulseDot";
 import { nullCastFactoryConfig, vaultFactoryConfig } from "@/lib/contracts";
+import { useFactoryMarkets } from "@/hooks/useFactory";
+import { useMarket } from "@/hooks/useMarket";
 
 /* ── Stat component ───────────────────────────────────────── */
 function Stat({
@@ -72,20 +74,53 @@ function useProtocolStats() {
   };
 }
 
-/* ── Ticker data ──────────────────────────────────────────── */
-const TICKER_MARKETS = [
-  { q: "Will ETH surpass $5,000 by Q3 2026?", yes: 66, trend: 2.1 },
-  { q: "Bitcoin above $120K by year end?", yes: 42, trend: -1.4 },
-  { q: "Fed cuts rates before September?", yes: 71, trend: 0.8 },
-  { q: "Solana flips Ethereum in TVL?", yes: 18, trend: -3.2 },
-  { q: "Apple launches crypto wallet?", yes: 34, trend: 1.1 },
-  { q: "US stablecoin bill passes 2026?", yes: 58, trend: 0 },
-];
+/* ── TickerItem — shows one market's question + odds ─────── */
+function TickerItem({ address }: { address: `0x${string}` }) {
+  const { question, yesOdds, isOddsLoading } = useMarket(address);
+
+  if (!question) return null;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+        padding: "0 28px",
+        borderRight: "1px solid var(--line)",
+        whiteSpace: "nowrap",
+        minWidth: 340,
+      }}
+    >
+      <span
+        className="serif"
+        style={{
+          fontSize: 15,
+          color: "var(--ink-1)",
+          fontStyle: "italic",
+        }}
+      >
+        {question}
+      </span>
+      <span
+        className="mono"
+        style={{ fontSize: 12, color: "var(--yes)" }}
+      >
+        {isOddsLoading ? "..." : `${yesOdds}%`}
+      </span>
+    </div>
+  );
+}
 
 /* ── LiveTicker ───────────────────────────────────────────── */
 function LiveTicker() {
-  const items = TICKER_MARKETS;
-  const doubled = [...items, ...items];
+  const { allMarkets } = useFactoryMarkets();
+
+  if (allMarkets.length === 0) return null;
+
+  // Double the list for seamless infinite scroll
+  const doubled = [...allMarkets, ...allMarkets];
+
   return (
     <div
       style={{
@@ -98,51 +133,8 @@ function LiveTicker() {
       }}
     >
       <div className="ticker-track">
-        {doubled.map((m, i) => (
-          <div
-            key={i}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 14,
-              padding: "0 28px",
-              borderRight: "1px solid var(--line)",
-              whiteSpace: "nowrap",
-              minWidth: 340,
-            }}
-          >
-            <span
-              className="serif"
-              style={{
-                fontSize: 15,
-                color: "var(--ink-1)",
-                fontStyle: "italic",
-              }}
-            >
-              {m.q}
-            </span>
-            <span
-              className="mono"
-              style={{ fontSize: 12, color: "var(--yes)" }}
-            >
-              {m.yes}%
-            </span>
-            <span
-              className="mono"
-              style={{
-                fontSize: 11,
-                color:
-                  m.trend > 0
-                    ? "var(--yes)"
-                    : m.trend < 0
-                      ? "var(--no)"
-                      : "var(--ink-3)",
-              }}
-            >
-              {m.trend > 0 ? "\u25B2" : m.trend < 0 ? "\u25BC" : "\u00B7"}{" "}
-              {Math.abs(m.trend).toFixed(1)}
-            </span>
-          </div>
+        {doubled.map((addr, i) => (
+          <TickerItem key={`${addr}-${i}`} address={addr} />
         ))}
       </div>
     </div>
