@@ -98,12 +98,16 @@ export function Sidebar() {
       <div style={{ flex: 1 }} />
 
       {/* Search hint */}
-      <div className="search-trigger">
+      <button
+        className="search-trigger"
+        type="button"
+        onClick={() => (window as unknown as { openCommandPalette?: () => void }).openCommandPalette?.()}
+      >
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <Icon name="search" size={12} /> Search
         </span>
         <span className="kbd">&#8984;K</span>
-      </div>
+      </button>
 
       {/* Account chip */}
       <div className="account-chip">
@@ -117,7 +121,7 @@ export function Sidebar() {
 export function TopBar() {
   return (
     <div className="top-bar">
-      <button className="top-bar-search" type="button">
+      <button className="top-bar-search" type="button" onClick={() => (window as unknown as { openCommandPalette?: () => void }).openCommandPalette?.()}>
         <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Icon name="search" size={12} /> Search markets, addresses...
         </span>

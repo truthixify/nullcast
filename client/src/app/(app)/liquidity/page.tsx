@@ -185,10 +185,14 @@ function MarketLPCard({
           </div>
           <div className="mono" style={{ fontSize: 20, color: isLP ? "var(--ink-1)" : "var(--ink-3)", letterSpacing: "-0.01em" }}>
             {isLP ? (
-              <>
-                <CipherReveal value={shareAmount.toFixed(2)} reveal={reveal} width={7} />
-                <span style={{ color: "var(--ink-3)", fontSize: 11, marginLeft: 6 }}>cUSDT</span>
-              </>
+              shareAmount > 0 ? (
+                <>
+                  <CipherReveal value={shareAmount.toFixed(2)} reveal={reveal} width={7} />
+                  <span style={{ color: "var(--ink-3)", fontSize: 11, marginLeft: 6 }}>cUSDT</span>
+                </>
+              ) : (
+                <span style={{ fontSize: 13, color: "var(--ink-3)" }}>Sync to reveal</span>
+              )
             ) : (
               <span style={{ fontSize: 14 }}>&mdash;</span>
             )}
@@ -384,6 +388,13 @@ function MarketLPCard({
 export default function LiquidityPage() {
   const { allMarkets, isLoading } = useFactoryMarkets();
   const [reveal, setReveal] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try { await fetch("/api/keeper"); } catch { /* ignore */ }
+    setSyncing(false);
+  };
 
   return (
     <div className="page-in" style={{ maxWidth: 1280, margin: "0 auto", padding: "44px 48px 80px" }}>
@@ -410,6 +421,21 @@ export default function LiquidityPage() {
         >
           <Icon name="eye" size={12} />
           {reveal ? "Revealed" : "Reveal shares"}
+        </button>
+        <button
+          onClick={handleSync}
+          disabled={syncing}
+          style={{
+            fontSize: 11,
+            padding: "7px 12px",
+            border: "1px solid var(--line)",
+            borderRadius: 3,
+            color: syncing ? "var(--ink-4)" : "var(--ink-3)",
+            cursor: syncing ? "default" : "pointer",
+            background: "transparent",
+          }}
+        >
+          {syncing ? "Syncing..." : "Sync totals"}
         </button>
       </div>
 

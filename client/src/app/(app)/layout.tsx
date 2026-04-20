@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 import { Sidebar, TopBar, MobileNav } from "@/components/shared/Header";
+import { CommandPalette } from "@/components/shared/CommandPalette";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
@@ -14,6 +15,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </main>
       </div>
       <MobileNav />
+      <CommandPalette />
     </>
   );
 }
