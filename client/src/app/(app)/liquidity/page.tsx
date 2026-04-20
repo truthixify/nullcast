@@ -71,10 +71,9 @@ function MarketLPCard({
     !poolAddress || poolAddress === "0x0000000000000000000000000000000000000000";
 
   /* ── Pool stats ────────────────────────────────────────────── */
-  const { lpCount } = useLiquidityPool(
-    isZeroPool
-      ? ("0x0000000000000000000000000000000000000000" as `0x${string}`)
-      : poolAddress
+  const zeroAddr = "0x0000000000000000000000000000000000000000" as `0x${string}`;
+  const { totalLiquidity, lpCount } = useLiquidityPool(
+    isZeroPool ? zeroAddr : poolAddress
   );
 
   /* ── Is user an LP? ────────────────────────────────────────── */
@@ -218,10 +217,15 @@ function MarketLPCard({
           style={{ marginBottom: 16, fontSize: 13, color: "var(--t-2)" }}
         >
           <span className="mono">
-            {lpCount} LP{lpCount !== 1 ? "s" : ""}
+            {totalLiquidity > 0
+              ? `${totalLiquidity.toLocaleString(undefined, { maximumFractionDigits: 2 })} cUSDT`
+              : lpCount > 0
+                ? "Pending sync"
+                : "0.00 cUSDT"}
+            {" · "}{lpCount} LP{lpCount !== 1 ? "s" : ""}
           </span>
           <span className="mono" style={{ fontSize: 11, color: "var(--t-4)" }}>
-            Pool: {poolAddress.slice(0, 6)}...{poolAddress.slice(-4)}
+            {poolAddress.slice(0, 6)}...{poolAddress.slice(-4)}
           </span>
         </div>
 
@@ -455,17 +459,53 @@ function MarketLPCard({
 
 export default function LiquidityPage() {
   const { allMarkets, isLoading } = useFactoryMarkets();
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch("/api/keeper");
+      const data = await res.json();
+      if (data.ok) {
+        setSyncResult(`Synced ${data.updated} pool${data.updated !== 1 ? "s" : ""}`);
+      } else {
+        setSyncResult(data.error || "Sync failed");
+      }
+    } catch {
+      setSyncResult("Sync failed");
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncResult(null), 4000);
+    }
+  };
 
   return (
     <div className="page">
       <div className="container">
         {/* Page head */}
-        <div className="page-head" style={{ padding: 0, marginBottom: 24 }}>
-          <h1 style={{ fontSize: 36 }}>Liquidity</h1>
-          <p className="sub">
-            Provide liquidity to prediction markets and earn fees from trading
-            activity.
-          </p>
+        <div className="row between" style={{ marginBottom: 24 }}>
+          <div className="page-head" style={{ padding: 0 }}>
+            <h1 style={{ fontSize: 36 }}>Liquidity</h1>
+            <p className="sub">
+              Provide liquidity to markets and earn fees from trading.
+            </p>
+          </div>
+          <div className="row gap-2">
+            {syncResult && (
+              <span className="mono" style={{ fontSize: 11, color: "var(--t-3)" }}>
+                {syncResult}
+              </span>
+            )}
+            <button
+              className="btn secondary sm"
+              onClick={handleSync}
+              disabled={syncing}
+            >
+              {syncing ? "Syncing..." : "Sync totals"}
+            </button>
+          </div>
         </div>
 
         {/* Loading */}
