@@ -459,8 +459,8 @@ export default function MarketDetailPage({
           </h1>
 
           {/* ── Odds card ──────────────────────────────────────── */}
-          <div className="card elevated">
-            <div className="row between" style={{ marginBottom: 14 }}>
+          <div className="card elevated" style={{ padding: "20px 24px" }}>
+            <div className="row between" style={{ marginBottom: 16 }}>
               <span className="eyebrow">Aggregate odds</span>
               <button
                 className="btn ghost"
@@ -682,7 +682,7 @@ export default function MarketDetailPage({
                 </span>
                 <FHEBadge />
               </div>
-              <div className="card-body">
+              <div className="card-body" style={{ padding: "16px 18px" }}>
                 {/* Not connected */}
                 {!isConnected && (
                   <p
@@ -746,71 +746,53 @@ export default function MarketDetailPage({
                       }}
                     >
                       <button
-                        className={`card inter${side === "YES" ? " active" : ""}`}
+                        className="card inter"
                         type="button"
                         onClick={() => setSide("YES")}
                         style={{
                           cursor: "pointer",
-                          textAlign: "center",
-                          padding: "14px 8px",
-                          border:
-                            side === "YES"
-                              ? "1px solid var(--yes)"
-                              : undefined,
-                          background:
-                            side === "YES"
-                              ? "var(--yes-hi)"
-                              : undefined,
+                          textAlign: "left",
+                          padding: "16px 14px",
+                          background: side === "YES" ? "var(--yes-bg)" : undefined,
+                          borderColor: side === "YES" ? "var(--yes-bd)" : undefined,
                         }}
                       >
                         <div
                           className="display"
                           style={{
                             fontSize: 22,
-                            color:
-                              side === "YES"
-                                ? "var(--yes)"
-                                : "var(--t-1)",
+                            color: side === "YES" ? "var(--yes-hi)" : "var(--t-2)",
                           }}
                         >
                           YES
                         </div>
-                        <div className="mono" style={{ fontSize: 11, color: "var(--t-3)", marginTop: 2 }}>
-                          {yesPct}% &middot; {yesPct > 0 ? (100 / yesPct).toFixed(1) : "0.0"}x
+                        <div className="mono" style={{ fontSize: 11, color: "var(--t-3)", marginTop: 6 }}>
+                          {yesPct}% · ×{yesPct > 0 ? (100 / yesPct).toFixed(2) : "0.00"}
                         </div>
                       </button>
                       <button
-                        className={`card inter${side === "NO" ? " active" : ""}`}
+                        className="card inter"
                         type="button"
                         onClick={() => setSide("NO")}
                         style={{
                           cursor: "pointer",
-                          textAlign: "center",
-                          padding: "14px 8px",
-                          border:
-                            side === "NO"
-                              ? "1px solid var(--no)"
-                              : undefined,
-                          background:
-                            side === "NO"
-                              ? "var(--no-hi)"
-                              : undefined,
+                          textAlign: "left",
+                          padding: "16px 14px",
+                          background: side === "NO" ? "var(--no-bg)" : undefined,
+                          borderColor: side === "NO" ? "var(--no-bd)" : undefined,
                         }}
                       >
                         <div
                           className="display"
                           style={{
                             fontSize: 22,
-                            color:
-                              side === "NO"
-                                ? "var(--no)"
-                                : "var(--t-1)",
+                            color: side === "NO" ? "var(--no-hi)" : "var(--t-2)",
                           }}
                         >
                           NO
                         </div>
-                        <div className="mono" style={{ fontSize: 11, color: "var(--t-3)", marginTop: 2 }}>
-                          {noPct}% &middot; {noPct > 0 ? (100 / noPct).toFixed(1) : "0.0"}x
+                        <div className="mono" style={{ fontSize: 11, color: "var(--t-3)", marginTop: 6 }}>
+                          {noPct}% · ×{noPct > 0 ? (100 / noPct).toFixed(2) : "0.00"}
                         </div>
                       </button>
                     </div>
@@ -871,7 +853,7 @@ export default function MarketDetailPage({
                     <div
                       style={{
                         background: "var(--bg-1)",
-                        border: "1px solid var(--bd)",
+                        border: "1px solid var(--border-1)",
                         borderRadius: 8,
                         padding: "14px 16px",
                         marginBottom: 16,
@@ -919,35 +901,27 @@ export default function MarketDetailPage({
                         isBetConfirming
                       }
                       type="button"
-                      style={{ marginBottom: 12 }}
+                      style={{ marginBottom: 12, height: 48, fontSize: 14, fontWeight: 500 }}
                     >
-                      {betStep === "encrypting" ? (
-                        <>
-                          <LockIcon size={12} /> Encrypting via FHE...
-                        </>
-                      ) : betStep === "approving" ? (
-                        "Approving cUSDT..."
-                      ) : betStep === "writing" || isBetWriting ? (
-                        "Confirm in wallet..."
-                      ) : isBetConfirming ? (
-                        "Confirming on-chain..."
-                      ) : betStep === "confirmed" ? (
-                        <>
-                          <CheckIcon size={12} /> Bet placed
-                        </>
-                      ) : (
-                        <>
-                          <LockIcon size={12} /> Encrypt &amp; Bet {side} &middot;{" "}
-                          {amountNum}
-                        </>
-                      )}
+                      {betStep === "encrypting"
+                        ? "Encrypting..."
+                        : betStep === "approving"
+                          ? "Approving cUSDT..."
+                          : betStep === "writing" || isBetWriting
+                            ? "Confirm in wallet..."
+                            : isBetConfirming
+                              ? "Confirming..."
+                              : betStep === "confirmed"
+                                ? "Bet placed"
+                                : `Bet ${side} · ${amountNum} cUSDT`}
                     </button>
 
                     {/* Error state */}
                     {betStep === "error" && (
                       <div
                         style={{
-                          background: "var(--no-hi)",
+                          background: "var(--no-bg)",
+                          border: "1px solid var(--no-bd)",
                           borderRadius: 8,
                           padding: "10px 14px",
                           marginBottom: 12,
@@ -973,7 +947,8 @@ export default function MarketDetailPage({
                     {bet.error && betStep !== "error" && (
                       <div
                         style={{
-                          background: "var(--no-hi)",
+                          background: "var(--no-bg)",
+                          border: "1px solid var(--no-bd)",
                           borderRadius: 8,
                           padding: "10px 14px",
                           marginBottom: 12,

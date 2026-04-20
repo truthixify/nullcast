@@ -236,7 +236,7 @@ function MarketPositionCheck({
 export default function PortfolioPage() {
   const { address, isConnected } = useAccount();
   const { allMarkets, isLoading: isMarketsLoading } = useFactoryMarkets();
-  const storePositions = useNullCastStore((s) => s.positions);
+  useNullCastStore((s) => s.positions); // keep subscription active
 
   const [activeTab, setActiveTab] = useState<"active" | "settled" | "lp">("active");
   const [decryptAll, setDecryptAll] = useState(false);
@@ -299,13 +299,15 @@ export default function PortfolioPage() {
         {/* Stats */}
         <div className="grid-4" style={{ marginBottom: 32 }}>
           <Stat label="Active positions" sub="On-chain">
-            {isMarketsLoading ? "..." : storePositions.length}
+            {isMarketsLoading ? "..." : allMarkets.length}
           </Stat>
-          <Stat label="Total at stake" sub="Encrypted">
-            <EncryptedValue state="hidden" unit="cUSDT" compact />
+          <Stat label="Total at stake" sub="Decrypt to reveal">
+            <span className="mono" style={{ color: "var(--t-3)" }}>
+              {decryptAll ? "Decrypting…" : "—"}
+            </span>
           </Stat>
-          <Stat label="Unrealized P&L" sub="Encrypted">
-            <EncryptedValue state="hidden" unit="cUSDT" compact />
+          <Stat label="Unrealized P&L" sub="Decrypt to reveal">
+            <span className="mono" style={{ color: "var(--t-3)" }}>—</span>
           </Stat>
           <Stat label="Claimable" sub="Resolved markets">
             <span className="mono">0</span>
