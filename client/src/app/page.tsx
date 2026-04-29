@@ -1,138 +1,67 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { useReadContract } from "wagmi";
-import { Icon } from "@/components/shared/Icons";
-import { PulseDot } from "@/components/shared/PulseDot";
+import { Button } from "@/components/ui/button";
+import { LogoMark } from "@/components/nc/Logo";
+import { Sparkline } from "@/components/nc/Sparkline";
+import { OddsBar } from "@/components/nc/OddsBar";
+import { MARKETS, formatUSD } from "@/data/markets";
 import { nullCastFactoryConfig, vaultFactoryConfig } from "@/lib/contracts";
 import { useFactoryMarkets } from "@/hooks/useFactory";
 import { useMarket } from "@/hooks/useMarket";
 
-/* ── Stat component ───────────────────────────────────────── */
-function Stat({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: string;
-  value: string | number;
-  tone?: "default" | "gold" | "yes" | "no";
-}) {
-  const color =
-    tone === "yes"
-      ? "var(--yes)"
-      : tone === "no"
-        ? "var(--no)"
-        : tone === "gold"
-          ? "var(--gold)"
-          : "var(--ink-1)";
-  return (
-    <div>
-      <div
-        className="mono"
-        style={{
-          fontSize: 34,
-          color,
-          fontWeight: 500,
-          lineHeight: 1.1,
-          letterSpacing: "-0.02em",
-        }}
-      >
-        {value}
-      </div>
-      <div
-        style={{
-          marginTop: 6,
-          fontSize: 10,
-          color: "var(--ink-3)",
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
-      </div>
-    </div>
-  );
-}
+const HOUSE_RULES = [
+  {
+    n: "I",
+    title: "Bet without showing",
+    body: "Your size and side stay encrypted on-chain. Front-runners see noise.",
+  },
+  {
+    n: "II",
+    title: "Settle on the truth",
+    body: "Markets resolve from oracles. Winners claim, losers learn. No middle.",
+  },
+  {
+    n: "III",
+    title: "The house has no cards",
+    body: "There is no operator. The protocol is the table. Code is the dealer.",
+  },
+];
 
-/* ── Live stats from on-chain ────────────────────────────── */
 function useProtocolStats() {
   const { data: marketCount } = useReadContract({
     ...nullCastFactoryConfig,
     functionName: "getMarketCount",
   });
-
   const { data: vaultCount } = useReadContract({
     ...vaultFactoryConfig,
     functionName: "getVaultCount",
   });
-
   return {
     markets: marketCount ? Number(marketCount) : 0,
     vaults: vaultCount ? Number(vaultCount) : 0,
   };
 }
 
-/* ── TickerItem — shows one market's question + odds ─────── */
 function TickerItem({ address }: { address: `0x${string}` }) {
   const { question, yesOdds, isOddsLoading } = useMarket(address);
-
   if (!question) return null;
-
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 14,
-        padding: "0 28px",
-        borderRight: "1px solid var(--line)",
-        whiteSpace: "nowrap",
-        minWidth: 340,
-      }}
-    >
-      <span
-        className="serif"
-        style={{
-          fontSize: 15,
-          color: "var(--ink-1)",
-          fontStyle: "italic",
-        }}
-      >
-        {question}
-      </span>
-      <span
-        className="mono"
-        style={{ fontSize: 12, color: "var(--yes)" }}
-      >
-        {isOddsLoading ? "..." : `${yesOdds}%`}
-      </span>
+    <div className="flex items-center gap-3 px-8 border-r border-subtle whitespace-nowrap">
+      <span className="font-display text-fg text-sm max-w-[280px] truncate italic">{question}</span>
+      <span className="font-mono tnum text-yes text-sm">{isOddsLoading ? "..." : `${yesOdds}%`}</span>
     </div>
   );
 }
 
-/* ── LiveTicker ───────────────────────────────────────────── */
 function LiveTicker() {
   const { allMarkets } = useFactoryMarkets();
-
   if (allMarkets.length === 0) return null;
-
-  // Double the list for seamless infinite scroll
   const doubled = [...allMarkets, ...allMarkets];
-
   return (
-    <div
-      style={{
-        borderTop: "1px solid var(--line)",
-        borderBottom: "1px solid var(--line)",
-        overflow: "hidden",
-        padding: "14px 0",
-        background: "var(--bg-1)",
-        position: "relative",
-      }}
-    >
-      <div className="ticker-track">
+    <div className="overflow-hidden border-y border-subtle bg-surface-1/50">
+      <div className="flex animate-marquee whitespace-nowrap py-3">
         {doubled.map((addr, i) => (
           <TickerItem key={`${addr}-${i}`} address={addr} />
         ))}
@@ -141,174 +70,265 @@ function LiveTicker() {
   );
 }
 
-/* ── LandingPage ──────────────────────────────────────────── */
-export default function LandingPage() {
-  const [hoverTrade, setHoverTrade] = useState(false);
-  const stats = useProtocolStats();
-
+function MockTicker() {
+  const items = [...MARKETS, ...MARKETS];
   return (
-    <div
-      className="page-in"
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      {/* Hero */}
-      <section
-        style={{
-          maxWidth: 1280,
-          width: "100%",
-          margin: "0 auto",
-          padding: "120px 48px 80px",
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-        }}
-      >
-        <div style={{ maxWidth: 900 }}>
-          {/* Eyebrow */}
-          <div
-            className="mono"
-            style={{
-              fontSize: 10,
-              color: "var(--gold)",
-              letterSpacing: "0.28em",
-              textTransform: "uppercase",
-              marginBottom: 28,
-            }}
+    <div className="overflow-hidden border-y border-subtle bg-surface-1/50">
+      <div className="flex animate-marquee whitespace-nowrap py-3">
+        {items.map((m, i) => (
+          <Link
+            key={i}
+            href={`/markets/${m.id}`}
+            className="flex items-center gap-3 px-8 border-r border-subtle hover:bg-surface-2 transition-colors"
           >
-            <span style={{ marginRight: 10 }}>&mdash;</span>
-            Prediction markets, private by default
-          </div>
+            <span className="font-display text-fg text-sm max-w-[280px] truncate">{m.question}</span>
+            <span className="font-mono tnum text-yes text-sm">{m.yesOdds}%</span>
+            <span className="font-mono text-fg-3 text-xs">{formatUSD(m.pool)}</span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-          {/* Headline */}
-          <h1
-            className="serif"
-            style={{
-              fontSize: "clamp(48px, 7vw, 92px)",
-              lineHeight: 1.02,
-              letterSpacing: "-0.025em",
-              fontWeight: 500,
-              color: "var(--ink-1)",
-              textWrap: "balance",
-            }}
-          >
-            The house can&rsquo;t see <br />
-            <em
-              style={{
-                color: "var(--gold)",
-                fontStyle: "italic",
-                fontWeight: 400,
-              }}
-            >
-              your cards.
-            </em>
-          </h1>
-
-          {/* Subtitle — mentions all features */}
-          <p
-            style={{
-              marginTop: 28,
-              fontSize: 17,
-              color: "var(--ink-2)",
-              maxWidth: 620,
-              lineHeight: 1.55,
-            }}
-          >
-            Encrypted positions on Zama fhEVM &mdash; no one sees your side or size.
-            Copy top predictors through strategy vaults, earn reputation to unlock
-            premium markets, and provide liquidity to earn fees. All with full privacy.
-          </p>
-
-          {/* Buttons */}
-          <div style={{ display: "flex", gap: 10, marginTop: 44 }}>
-            <Link
-              href="/markets"
-              style={{
-                padding: "13px 22px",
-                background: hoverTrade ? "#E6B95A" : "var(--gold)",
-                color: "#1A1511",
-                borderRadius: 4,
-                fontSize: 13,
-                fontWeight: 500,
-                letterSpacing: "0.01em",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                transition: "background 200ms, transform 200ms",
-                textDecoration: "none",
-              }}
-              onMouseEnter={() => setHoverTrade(true)}
-              onMouseLeave={() => setHoverTrade(false)}
-            >
-              Trade now{" "}
-              <Icon name="arrow-right" size={13} color="#1A1511" />
-            </Link>
-            <Link
-              href="/vaults"
-              style={{
-                padding: "13px 22px",
-                border: "1px solid var(--line-2)",
-                borderRadius: 4,
-                color: "var(--ink-1)",
-                fontSize: 13,
-                textDecoration: "none",
-              }}
-            >
-              Copy strategies
-            </Link>
+const SpecCard = () => {
+  const m = MARKETS[0];
+  return (
+    <div className="relative w-full max-w-[420px]">
+      <div className="absolute inset-0 translate-x-3 translate-y-3 rounded border border-subtle/60 bg-surface-1/60" />
+      <div className="absolute inset-0 translate-x-1.5 translate-y-1.5 rounded border border-subtle bg-surface-1/80" />
+      <div className="relative rounded border border-strong bg-surface-1 p-5 backdrop-blur-xl">
+        <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.18em] text-fg-3">
+          <span className="flex items-center gap-1.5"><span className="live-dot" /> Live order</span>
+          <span className="text-primary flex items-center gap-1.5">sealed · euint64</span>
+        </div>
+        <h3 className="font-display text-[18px] leading-snug text-fg mt-4">{m.question}</h3>
+        <div className="mt-4">
+          <OddsBar yes={m.yesOdds} height={10} showLabels={false} />
+          <div className="mt-1.5 flex justify-between font-mono text-[11px]">
+            <span className="text-yes tnum">YES {m.yesOdds}%</span>
+            <span className="text-no tnum">{100 - m.yesOdds}% NO</span>
           </div>
         </div>
+        <div className="mt-5 grid grid-cols-3 gap-3 text-[11px] font-mono">
+          {([["Bet", "100.00"], ["Side", "YES"], ["Pays", "147.05"]] as const).map(([k, v]) => (
+            <div key={k} className="border-l border-primary/40 pl-2.5">
+              <div className="text-fg-3 uppercase tracking-wider text-[9px]">{k}</div>
+              <div className="text-fg tnum mt-1">{v}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-5 pt-4 border-t border-subtle font-mono text-[10px] text-fg-3 flex items-center justify-between">
+          <span>Encrypted: <span className="text-primary">euint64 ●●●●●●●●</span></span>
+          <span>{formatUSD(m.pool)} pool</span>
+        </div>
+      </div>
+    </div>
+  );
+};
 
-        {/* Stats bar — real on-chain data */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: 40,
-            marginTop: 110,
-            paddingTop: 40,
-            borderTop: "1px solid var(--line)",
-            maxWidth: 900,
-          }}
-        >
-          <Stat label="Live markets" value={stats.markets || "..."} />
-          <Stat label="Strategy vaults" value={stats.vaults || "..."} />
-          <Stat label="Encryption" value="FHE" tone="gold" />
-          <Stat label="Network" value="Sepolia" />
+const StatPlaque = ({ value, label, idx }: { value: string; label: string; idx: string }) => (
+  <div className="plaque p-6 group">
+    <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-3 flex items-center gap-2">
+      <span className="section-numeral text-sm">{idx}</span>
+      <span className="h-px flex-1 bg-subtle" />
+    </div>
+    <div className="mt-4 font-mono tnum text-4xl md:text-5xl text-fg group-hover:text-primary transition-colors">
+      {value}
+    </div>
+    <div className="mt-2 font-mono text-[11px] uppercase tracking-wider text-fg-3">{label}</div>
+  </div>
+);
+
+export default function LandingPage() {
+  const stats = useProtocolStats();
+  const { allMarkets } = useFactoryMarkets();
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Minimal header */}
+      <header className="px-6 py-5 border-b border-subtle/50">
+        <div className="max-w-[1280px] mx-auto flex items-center justify-between">
+          <Link href="/" className="group flex items-center gap-2.5">
+            <LogoMark size={24} className="transition-transform group-hover:rotate-[8deg]" />
+            <span className="font-display text-lg tracking-tight leading-none">
+              null<span className="italic text-primary">cast</span>
+            </span>
+          </Link>
+          <div className="flex items-center gap-5">
+            <Link href="/markets" className="text-sm text-fg-2 hover:text-fg transition-colors">Markets</Link>
+            <Link href="/vaults" className="text-sm text-fg-2 hover:text-fg transition-colors hidden sm:inline">Vaults</Link>
+            <Link href="/reputation" className="text-sm text-fg-2 hover:text-fg transition-colors hidden sm:inline">Score</Link>
+            <Button asChild variant="primary" size="sm"><Link href="/markets">Launch app</Link></Button>
+          </div>
+        </div>
+      </header>
+
+      {/* Hero */}
+      <section className="px-6 py-16 md:py-24 relative overflow-hidden">
+        <div className="absolute -right-32 -top-20 opacity-[0.035] pointer-events-none select-none">
+          <LogoMark size={620} />
+        </div>
+        <div className="max-w-[1280px] mx-auto grid lg:grid-cols-[1.4fr_1fr] gap-16 items-center relative">
+          <div>
+            <div className="flex items-center gap-3 mb-8">
+              <span className="h-px w-10 bg-primary/60" />
+              <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-primary/90">
+                NullCast Protocol
+              </span>
+            </div>
+            <h1 className="font-display text-[56px] md:text-[88px] leading-[0.95] tracking-tight text-fg">
+              The house
+              <br />
+              can&apos;t see
+              <br />
+              <span className="italic text-primary">your cards.</span>
+            </h1>
+            <p className="mt-8 font-display text-lg md:text-xl text-fg-2 max-w-xl leading-relaxed">
+              Prediction markets where positions stay sealed. Place a bet
+              without showing the table what you&apos;re holding. Settle when
+              the truth arrives.
+            </p>
+            <div className="mt-10 flex items-center gap-3">
+              <Button asChild variant="primary" size="xl"><Link href="/markets">Trade now</Link></Button>
+              <Button asChild variant="outline" size="xl"><Link href="/markets">View markets</Link></Button>
+            </div>
+            <div className="mt-10 flex items-center gap-6 font-mono text-[11px] text-fg-3">
+              <span className="flex items-center gap-2"><span className="live-dot" /> Live</span>
+              <span className="text-fg-4">·</span>
+              <span>0.30% fee · No KYC · Open source</span>
+            </div>
+          </div>
+          <div className="flex justify-center lg:justify-end">
+            <SpecCard />
+          </div>
         </div>
       </section>
 
-      {/* Live ticker marquee */}
-      <div>
-        <div
-          style={{
-            maxWidth: 1280,
-            margin: "0 auto",
-            padding: "0 48px 10px",
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
-          <PulseDot color="var(--yes)" />
-          <span
-            className="mono"
-            style={{
-              fontSize: 10,
-              color: "var(--ink-3)",
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-            }}
-          >
-            Live markets
-          </span>
+      {/* Ticker — use real data if available, fallback to mock */}
+      {allMarkets.length > 0 ? <LiveTicker /> : <MockTicker />}
+
+      {/* Engraved stat plaques */}
+      <section className="px-6 py-20">
+        <div className="max-w-[1280px] mx-auto">
+          <div className="flex items-end justify-between mb-10">
+            <div>
+              <span className="section-numeral text-3xl">§ I</span>
+              <h2 className="font-display text-3xl text-fg mt-2">By the numbers</h2>
+            </div>
+            <span className="font-mono text-[10px] uppercase tracking-wider text-fg-3 hidden md:block">
+              Live on-chain · Sepolia testnet
+            </span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-transparent">
+            <StatPlaque idx="01" value={stats.markets ? String(stats.markets) : "..."} label="Live markets" />
+            <StatPlaque idx="02" value={stats.vaults ? String(stats.vaults) : "..."} label="Strategy vaults" />
+            <StatPlaque idx="03" value="FHE" label="Encryption" />
+            <StatPlaque idx="04" value="Sepolia" label="Network" />
+          </div>
         </div>
-        <LiveTicker />
-      </div>
+      </section>
+
+      {/* Featured markets with sparklines */}
+      <section className="px-6 py-12 border-t border-subtle">
+        <div className="max-w-[1280px] mx-auto">
+          <div className="flex items-end justify-between mb-8">
+            <div>
+              <span className="section-numeral text-3xl">§ II</span>
+              <h2 className="font-display text-3xl text-fg mt-2">On the table</h2>
+            </div>
+            <Link href="/markets" className="font-mono text-xs text-fg-3 hover:text-fg transition-colors">
+              All markets →
+            </Link>
+          </div>
+          <div className="grid md:grid-cols-3 gap-px">
+            {MARKETS.slice(0, 3).map((m) => (
+              <Link
+                key={m.id}
+                href={`/markets/${m.id}`}
+                className="card-etched p-6 flex flex-col gap-4 hover:bg-surface-2/30 transition-colors group"
+              >
+                <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-fg-3">
+                  <span>{m.category}</span>
+                  <span className="tnum">{m.expiry}</span>
+                </div>
+                <h3 className="font-display text-lg leading-snug text-fg group-hover:text-primary transition-colors min-h-[3.5rem]">
+                  {m.question}
+                </h3>
+                <div className="flex items-end justify-between">
+                  <div>
+                    <div className="font-mono tnum text-3xl text-yes">{m.yesOdds}%</div>
+                    <div className="font-mono text-[10px] uppercase tracking-wider text-fg-3 mt-1">YES</div>
+                  </div>
+                  <Sparkline
+                    data={m.history.map((h) => h.yes)}
+                    width={120}
+                    height={36}
+                    stroke="hsl(var(--yes))"
+                    fill="hsl(var(--yes) / 0.12)"
+                  />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* House rules */}
+      <section className="px-6 py-20 border-t border-subtle">
+        <div className="max-w-[1280px] mx-auto">
+          <div className="mb-10">
+            <span className="section-numeral text-3xl">§ III</span>
+            <h2 className="font-display text-3xl text-fg mt-2">House rules</h2>
+            <p className="mt-2 text-fg-3 font-display max-w-xl">
+              Three principles. Etched, not negotiable.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-px">
+            {HOUSE_RULES.map((r) => (
+              <div key={r.n} className="card-etched p-8 relative overflow-hidden group">
+                <div className="font-display italic text-primary text-7xl absolute -top-2 -right-1 opacity-15 group-hover:opacity-30 transition-opacity">
+                  {r.n}
+                </div>
+                <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary relative">
+                  Rule {r.n}
+                </div>
+                <h3 className="font-display text-2xl text-fg mt-4 relative">{r.title}</h3>
+                <p className="mt-4 text-sm text-fg-2 leading-relaxed font-display relative">{r.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Final wide CTA */}
+      <section className="px-6 py-24 border-t border-subtle relative overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.04]">
+            <LogoMark size={420} />
+          </div>
+        </div>
+        <div className="max-w-[1280px] mx-auto text-center relative">
+          <h2 className="font-display text-4xl md:text-6xl text-fg leading-tight">
+            Sit down. <span className="italic text-primary">Place your bet.</span>
+          </h2>
+          <p className="mt-5 text-fg-2 font-display text-lg max-w-md mx-auto">
+            The cards stay face-down until the river.
+          </p>
+          <div className="mt-10 flex items-center justify-center gap-3">
+            <Button asChild variant="primary" size="xl"><Link href="/markets">Enter the table</Link></Button>
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-subtle py-6">
+        <div className="max-w-[1280px] mx-auto px-6 flex items-center justify-between text-xs text-fg-3">
+          <div className="flex items-center gap-2">
+            <LogoMark size={14} />
+            <span className="font-display italic">The house can&apos;t see your cards.</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
