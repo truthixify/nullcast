@@ -1,29 +1,7 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
-import { Cormorant_Garamond, JetBrains_Mono } from "next/font/google";
 import "@rainbow-me/rainbowkit/styles.css";
-import "../styles/design.css";
 import "./globals.css";
 import { Providers } from "@/components/providers";
-
-const geist = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist",
-});
-
-const cormorant = Cormorant_Garamond({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-cormorant",
-  display: "swap",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-jetbrains-mono",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "NullCast — Bet without revealing",
@@ -53,9 +31,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geist.variable} ${cormorant.variable} ${jetbrainsMono.variable} antialiased`}
-      >
+      <body className="antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>
