@@ -10,11 +10,18 @@ import {
   useWaitForTransactionReceipt,
   useWatchContractEvent,
 } from "wagmi";
-import { Icon, CheckIcon } from "@/components/shared/Icons";
-import { OddsBar } from "@/components/shared/OddsBar";
-import { GlowCard } from "@/components/shared/GlowCard";
-import { CipherReveal } from "@/components/shared/CipherReveal";
-import { PulseDot } from "@/components/shared/PulseDot";
+import {
+  ArrowLeft,
+  Eye,
+  Check,
+  RefreshCw,
+  AlertTriangle,
+} from "lucide-react";
+import { OddsBar } from "@/components/nc/OddsBar";
+import { GlowCard } from "@/components/nc/GlowCard";
+import { RevealNumber } from "@/components/nc/RevealNumber";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useMarket, useHasPosition } from "@/hooks/useMarket";
 import { usePlaceBet } from "@/hooks/usePlaceBet";
 import { useClaimWinnings } from "@/hooks/useClaimWinnings";
@@ -77,18 +84,10 @@ function formatPool(value: number): string {
 function MetaCell({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div
-        style={{
-          fontSize: 9,
-          color: "var(--ink-4)",
-          letterSpacing: "0.18em",
-          textTransform: "uppercase",
-          marginBottom: 5,
-        }}
-      >
+      <div className="text-[9px] text-fg-4 tracking-[0.18em] uppercase mb-1">
         {label}
       </div>
-      <div className="mono" style={{ color: "var(--ink-2)", fontSize: 11 }}>
+      <div className="font-mono text-fg-2 text-[11px]">
         {value}
       </div>
     </div>
@@ -111,51 +110,26 @@ function SideButton({
   dim: boolean;
 }) {
   const isYes = side === "YES";
-  const color = isYes ? "var(--yes)" : "var(--no)";
   return (
     <button
       type="button"
       onClick={onClick}
-      style={{
-        position: "relative",
-        padding: "16px 0",
-        border: `1px solid ${active ? color : "var(--line-2)"}`,
-        borderLeft: active
-          ? `3px solid ${color}`
-          : "1px solid var(--line-2)",
-        borderRadius: 4,
-        background: active
+      className={`
+        relative py-4 rounded text-center cursor-pointer transition-all duration-200
+        ${active
           ? isYes
-            ? "rgba(107,155,122,0.08)"
-            : "rgba(184,107,107,0.08)"
-          : "var(--bg-0)",
-        opacity: dim ? 0.4 : 1,
-        transition: "all 220ms cubic-bezier(0.22, 1, 0.36, 1)",
-        transform: active ? "scale(1.0)" : "scale(0.98)",
-        textAlign: "center",
-        cursor: "pointer",
-      }}
+            ? "border border-yes border-l-[3px] bg-yes/[0.08]"
+            : "border border-no border-l-[3px] bg-no/[0.08]"
+          : "border border-subtle bg-background"
+        }
+        ${dim ? "opacity-40" : "opacity-100"}
+        ${active ? "scale-100" : "scale-[0.98]"}
+      `}
     >
-      <div
-        className="mono"
-        style={{
-          fontSize: 11,
-          color,
-          letterSpacing: "0.18em",
-          fontWeight: 500,
-        }}
-      >
+      <div className={`font-mono text-[11px] tracking-[0.18em] font-medium ${isYes ? "text-yes" : "text-no"}`}>
         {side}
       </div>
-      <div
-        className="mono"
-        style={{
-          fontSize: 20,
-          color: "var(--ink-1)",
-          marginTop: 6,
-          letterSpacing: "-0.01em",
-        }}
-      >
+      <div className="font-mono text-xl text-fg mt-1.5 tracking-tight">
         {pct.toFixed(1)}%
       </div>
     </button>
@@ -489,7 +463,7 @@ export default function MarketDetailPage({
         ? "NO"
         : market.resolvedOutcome?.toString() ?? "--";
 
-  /* ── Position display value for CipherReveal ─────────────────── */
+  /* ── Position display value for RevealNumber ─────────────────── */
   const positionData = useMemo(() => {
     if (!userDecrypt.isDecrypted) return { yes: 0, no: 0, total: "0.00" };
     const yes = userDecrypt.yesAmount ? Number(userDecrypt.yesAmount) / 1e6 : 0;
@@ -501,27 +475,16 @@ export default function MarketDetailPage({
   /* ── Error / loading states ──────────────────────────────────── */
   if (!isValidId) {
     return (
-      <div
-        className="page-in"
-        style={{
-          maxWidth: 1280,
-          margin: "0 auto",
-          padding: "80px 48px",
-          textAlign: "center",
-        }}
-      >
-        <p style={{ color: "var(--ink-2)", marginBottom: 12 }}>
+      <div className="animate-fade-in max-w-7xl mx-auto px-6 md:px-12 py-20 text-center">
+        <p className="text-fg-2 mb-3">
           Invalid market ID
         </p>
         <Link
           href="/markets"
-          style={{
-            fontSize: 13,
-            color: "var(--gold)",
-            textDecoration: "none",
-          }}
+          className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors"
         >
-          &larr; Back to Markets
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to Markets
         </Link>
       </div>
     );
@@ -529,58 +492,43 @@ export default function MarketDetailPage({
 
   if (isAddressLoading || (hasAddress && market.isLoading)) {
     return (
-      <div
-        className="page-in"
-        style={{
-          maxWidth: 1280,
-          margin: "0 auto",
-          padding: "80px 48px",
-          textAlign: "center",
-        }}
-      >
-        <span
-          className="mono"
-          style={{ color: "var(--ink-3)", fontSize: 12 }}
-        >
-          Loading market data from Sepolia...
-        </span>
+      <div className="animate-fade-in max-w-7xl mx-auto px-6 md:px-12 py-20">
+        <div className="mb-6">
+          <Skeleton className="h-4 w-32" />
+        </div>
+        <div className="grid lg:grid-cols-[1fr_400px] gap-8 lg:gap-10">
+          <div className="space-y-6">
+            <Skeleton className="h-12 w-3/4" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-3 w-full" />
+            <div className="flex gap-8">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+          </div>
+          <div>
+            <Skeleton className="h-[400px] w-full rounded-md" />
+          </div>
+        </div>
       </div>
     );
   }
 
   if (addressError || !hasAddress) {
     return (
-      <div
-        className="page-in"
-        style={{
-          maxWidth: 1280,
-          margin: "0 auto",
-          padding: "80px 48px",
-          textAlign: "center",
-        }}
-      >
-        <p style={{ color: "var(--ink-2)", marginBottom: 8 }}>
+      <div className="animate-fade-in max-w-7xl mx-auto px-6 md:px-12 py-20 text-center">
+        <p className="text-fg-2 mb-2">
           Market #{marketId} not found
         </p>
-        <p
-          className="mono"
-          style={{
-            color: "var(--ink-4)",
-            marginBottom: 20,
-            fontSize: 12,
-          }}
-        >
+        <p className="font-mono text-fg-4 mb-5 text-xs">
           This market may not exist on the factory contract.
         </p>
         <Link
           href="/markets"
-          style={{
-            fontSize: 13,
-            color: "var(--gold)",
-            textDecoration: "none",
-          }}
+          className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors"
         >
-          &larr; Back to Markets
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to Markets
         </Link>
       </div>
     );
@@ -588,35 +536,19 @@ export default function MarketDetailPage({
 
   if (market.error) {
     return (
-      <div
-        className="page-in"
-        style={{
-          maxWidth: 1280,
-          margin: "0 auto",
-          padding: "80px 48px",
-          textAlign: "center",
-        }}
-      >
-        <p style={{ color: "var(--ink-2)", marginBottom: 8 }}>
+      <div className="animate-fade-in max-w-7xl mx-auto px-6 md:px-12 py-20 text-center">
+        <p className="text-fg-2 mb-2">
           Error loading market
         </p>
-        <p
-          className="mono"
-          style={{ color: "var(--ink-4)", fontSize: 12 }}
-        >
+        <p className="font-mono text-fg-4 text-xs">
           {market.error.message}
         </p>
         <Link
           href="/markets"
-          style={{
-            fontSize: 13,
-            color: "var(--gold)",
-            marginTop: 20,
-            display: "inline-block",
-            textDecoration: "none",
-          }}
+          className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors mt-5"
         >
-          &larr; Back to Markets
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to Markets
         </Link>
       </div>
     );
@@ -624,144 +556,53 @@ export default function MarketDetailPage({
 
   /* ── Render ──────────────────────────────────────────────────── */
   return (
-    <div
-      className="page-in market-detail-page"
-      style={{
-        maxWidth: 1280,
-        margin: "0 auto",
-        padding: "32px 48px 80px",
-      }}
-    >
+    <div className="animate-fade-in max-w-7xl mx-auto px-6 md:px-12 pt-8 pb-20">
       {/* Breadcrumb */}
-      <div style={{ marginBottom: 24 }}>
+      <div className="mb-6">
         <Link
           href="/markets"
-          className="mono"
-          style={{
-            fontSize: 11,
-            color: "var(--ink-3)",
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            textDecoration: "none",
-          }}
+          className="inline-flex items-center gap-2 text-sm text-fg-3 hover:text-fg-2 transition-colors"
         >
-          &larr; Markets
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Markets
         </Link>
-        <span
-          className="mono"
-          style={{
-            fontSize: 11,
-            color: "var(--ink-4)",
-            margin: "0 10px",
-          }}
-        >
-          /
-        </span>
-        <span
-          className="mono"
-          style={{
-            fontSize: 11,
-            color: "var(--ink-3)",
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-          }}
-        >
+        <span className="font-mono text-[11px] text-fg-4 mx-2.5">/</span>
+        <span className="font-mono text-[11px] text-fg-3 tracking-wider uppercase">
           {market.category || MARKET_TYPE_LABELS[market.marketType ?? 0] || "Binary"}
         </span>
       </div>
 
-      <div
-        className="market-detail-grid"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 380px",
-          gridTemplateRows: "auto auto",
-          gap: "48px",
-          alignItems: "flex-start",
-        }}
-      >
+      <div className="grid lg:grid-cols-[1fr_400px] gap-8 lg:gap-10 items-start">
         {/* ================================================================
             LEFT COLUMN
             ================================================================ */}
         <div>
           {/* Question */}
-          <h1
-            className="serif"
-            style={{
-              fontSize: 42,
-              fontWeight: 500,
-              letterSpacing: "-0.02em",
-              lineHeight: 1.15,
-              color: "var(--ink-1)",
-              textWrap: "balance",
-              margin: 0,
-            }}
-          >
+          <h1 className="font-display text-[clamp(28px,4vw,42px)] font-medium tracking-tight leading-[1.15] text-fg text-balance">
             {market.question ?? "Loading..."}
           </h1>
 
           {/* Big odds bar */}
-          <div style={{ marginTop: 40 }}>
+          <div className="mt-10">
             <OddsBar
               yes={yesPct}
-              no={noPct}
-              size="lg"
+              height={12}
               showLabels={false}
             />
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginTop: 14,
-              }}
-            >
+            <div className="flex justify-between mt-3.5">
               <div>
-                <div
-                  className="mono"
-                  style={{
-                    fontSize: 30,
-                    color: "var(--yes)",
-                    fontWeight: 500,
-                    letterSpacing: "-0.02em",
-                  }}
-                >
+                <div className="font-mono text-[30px] text-yes font-medium tracking-tight">
                   {yesPct.toFixed(1)}%
                 </div>
-                <div
-                  className="mono"
-                  style={{
-                    fontSize: 10,
-                    color: "var(--ink-3)",
-                    letterSpacing: "0.16em",
-                    textTransform: "uppercase",
-                    marginTop: 4,
-                  }}
-                >
+                <div className="font-mono text-[10px] text-fg-3 tracking-[0.16em] uppercase mt-1">
                   YES
                 </div>
               </div>
-              <div style={{ textAlign: "right" }}>
-                <div
-                  className="mono"
-                  style={{
-                    fontSize: 30,
-                    color: "var(--no)",
-                    fontWeight: 500,
-                    letterSpacing: "-0.02em",
-                  }}
-                >
+              <div className="text-right">
+                <div className="font-mono text-[30px] text-no font-medium tracking-tight">
                   {noPct.toFixed(1)}%
                 </div>
-                <div
-                  className="mono"
-                  style={{
-                    fontSize: 10,
-                    color: "var(--ink-3)",
-                    letterSpacing: "0.16em",
-                    textTransform: "uppercase",
-                    marginTop: 4,
-                  }}
-                >
+                <div className="font-mono text-[10px] text-fg-3 tracking-[0.16em] uppercase mt-1">
                   NO
                 </div>
               </div>
@@ -769,64 +610,32 @@ export default function MarketDetailPage({
           </div>
 
           {/* Pool row */}
-          <div
-            className="mono"
-            style={{
-              marginTop: 32,
-              paddingTop: 20,
-              paddingBottom: 20,
-              borderTop: "1px solid var(--line)",
-              borderBottom: "1px solid var(--line)",
-              display: "flex",
-              gap: 32,
-              fontSize: 13,
-              color: "var(--ink-2)",
-              alignItems: "center",
-            }}
-          >
-            <span
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <PulseDot color="var(--gold)" />
-              <span style={{ color: "var(--ink-1)" }}>
+          <div className="font-mono mt-8 py-5 border-y border-subtle flex items-center gap-8 text-[13px] text-fg-2">
+            <span className="flex items-center gap-2">
+              <span className="live-dot" />
+              <span className="text-fg">
                 {formatPool(market.totalPool)}
               </span>
-              <span style={{ color: "var(--ink-3)", fontSize: 11 }}>
+              <span className="text-fg-3 text-[11px]">
                 pool
               </span>
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleSyncOdds}
                 disabled={isSyncing}
-                className="mono"
-                style={{
-                  fontSize: 10,
-                  color: isSyncing ? "var(--ink-4)" : "var(--gold-dim)",
-                  padding: "2px 6px",
-                  border: "1px solid var(--line)",
-                  borderRadius: 3,
-                  cursor: isSyncing ? "default" : "pointer",
-                  background: "transparent",
-                }}
+                className="h-6 px-2 text-[10px] font-mono"
               >
+                <RefreshCw className={`w-3 h-3 ${isSyncing ? "animate-spin" : ""}`} />
                 {isSyncing ? "syncing" : "sync"}
-              </button>
+              </Button>
             </span>
-            <span style={{ color: "var(--ink-4)" }}>&middot;</span>
+            <span className="text-fg-4">&middot;</span>
             <span>
-              <span style={{ color: "var(--ink-1)" }}>
+              <span className="text-fg">
                 {fmtExpiry(market.expiryBlock, currentBlock ?? undefined)}
               </span>
-              <span
-                style={{
-                  color: "var(--ink-3)",
-                  fontSize: 11,
-                  marginLeft: 6,
-                }}
-              >
+              <span className="text-fg-3 text-[11px] ml-1.5">
                 expiry
               </span>
             </span>
@@ -834,111 +643,61 @@ export default function MarketDetailPage({
 
           {/* Your position (compact) */}
           {(hasPosition || localPositions.length > 0) && (
-            <div
-              style={{
-                marginTop: 24,
-                padding: "14px 18px",
-                border: "1px solid var(--line)",
-                borderRadius: 4,
-                display: "flex",
-                alignItems: "center",
-                gap: 24,
-              }}
-            >
-              <span
-                className="mono"
-                style={{
-                  fontSize: 10,
-                  color: "var(--ink-3)",
-                  letterSpacing: "0.16em",
-                  textTransform: "uppercase",
-                }}
-              >
+            <div className="mt-6 px-4 py-3.5 border border-subtle rounded flex items-center gap-6">
+              <span className="font-mono text-[10px] text-fg-3 tracking-[0.16em] uppercase">
                 Your position
               </span>
               {userDecrypt.isDecrypted ? (
-                <span style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                <span className="flex items-center gap-4 flex-wrap">
                   {positionData.yes > 0 && (
-                    <span className="mono" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ color: "var(--yes)", fontWeight: 500 }}>YES</span>
-                      <CipherReveal value={positionData.yes.toFixed(2)} reveal={positionReveal} width={7} />
+                    <span className="font-mono text-[13px] flex items-center gap-1.5">
+                      <span className="text-yes font-medium">YES</span>
+                      <RevealNumber value={positionData.yes.toFixed(2)} revealed={positionReveal} />
                     </span>
                   )}
                   {positionData.no > 0 && (
-                    <span className="mono" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ color: "var(--no)", fontWeight: 500 }}>NO</span>
-                      <CipherReveal value={positionData.no.toFixed(2)} reveal={positionReveal} width={7} />
+                    <span className="font-mono text-[13px] flex items-center gap-1.5">
+                      <span className="text-no font-medium">NO</span>
+                      <RevealNumber value={positionData.no.toFixed(2)} revealed={positionReveal} />
                     </span>
                   )}
-                  <span style={{ color: "var(--ink-3)", fontSize: 11 }}>cUSDT</span>
+                  <span className="text-fg-3 text-[11px]">cUSDT</span>
                 </span>
               ) : (
-                <span className="mono" style={{ fontSize: 14, color: "var(--ink-3)" }}>
+                <span className="font-mono text-sm text-fg-3">
                   {"\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"}
-                  <span style={{ color: "var(--ink-3)", marginLeft: 6, fontSize: 11 }}>cUSDT</span>
+                  <span className="text-fg-3 ml-1.5 text-[11px]">cUSDT</span>
                 </span>
               )}
-              <div style={{ flex: 1 }} />
+              <div className="flex-1" />
               {userDecrypt.isDecrypted ? (
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setPositionReveal(true)}
                   disabled={positionReveal}
-                  style={{
-                    fontSize: 12,
-                    color: positionReveal
-                      ? "var(--ink-3)"
-                      : "var(--gold)",
-                    padding: "6px 12px",
-                    border: `1px solid ${positionReveal ? "var(--line)" : "var(--gold-dim)"}`,
-                    borderRadius: 3,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    cursor: positionReveal ? "default" : "pointer",
-                    background: "none",
-                  }}
+                  className={positionReveal ? "text-fg-3 border-subtle" : "text-primary border-primary/30"}
                 >
-                  <Icon name="eye" size={12} />
+                  <Eye className="w-3 h-3" />
                   {positionReveal ? "Revealed" : "Reveal"}
-                </button>
+                </Button>
               ) : (
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={userDecrypt.decrypt}
                   disabled={userDecrypt.isDecrypting}
-                  style={{
-                    fontSize: 12,
-                    color: "var(--gold)",
-                    padding: "6px 12px",
-                    border: "1px solid var(--gold-dim)",
-                    borderRadius: 3,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    cursor: "pointer",
-                    background: "none",
-                  }}
+                  className="text-primary border-primary/30"
                 >
-                  <Icon name="eye" size={12} />
+                  <Eye className="w-3 h-3" />
                   {userDecrypt.isDecrypting ? "Decrypting..." : "Reveal"}
-                </button>
+                </Button>
               )}
             </div>
           )}
 
           {/* Metadata grid */}
-          <div
-            className="mono"
-            style={{
-              marginTop: 36,
-              display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
-              gap: 20,
-              fontSize: 11,
-              color: "var(--ink-3)",
-            }}
-          >
+          <div className="mt-9 grid grid-cols-2 sm:grid-cols-4 gap-5">
             <MetaCell
               label="Oracle"
               value={
@@ -962,126 +721,47 @@ export default function MarketDetailPage({
             />
           </div>
 
-        </div>
-
-        {/* Activity — separate grid child so it can be reordered on mobile */}
-        <div className="market-detail-activity" style={{ marginTop: 0 }}>
-          <div style={{ marginTop: 48 }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "baseline",
-                justifyContent: "space-between",
-                marginBottom: 14,
-              }}
-            >
-              <h2
-                className="serif"
-                style={{
-                  fontSize: 20,
-                  fontWeight: 500,
-                  letterSpacing: "-0.01em",
-                  margin: 0,
-                }}
-              >
+          {/* Recent activity */}
+          <div className="mt-12">
+            <div className="flex items-baseline justify-between mb-3.5">
+              <h2 className="font-display text-xl font-medium tracking-tight">
                 Recent activity
               </h2>
-              <span
-                className="mono"
-                style={{
-                  fontSize: 10,
-                  color: "var(--ink-3)",
-                  letterSpacing: "0.14em",
-                  textTransform: "uppercase",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <PulseDot color="var(--yes)" /> live
+              <span className="font-mono text-[10px] text-fg-3 tracking-[0.14em] uppercase flex items-center gap-2">
+                <span className="live-dot" /> live
               </span>
             </div>
-            <div
-              style={{
-                border: "1px solid var(--line)",
-                borderRadius: 4,
-                background: "var(--bg-1)",
-                overflow: "hidden",
-              }}
-            >
+            <div className="border border-subtle rounded bg-surface-1 overflow-hidden">
               {activity.length === 0 && (
-                <div style={{ padding: "24px 18px", textAlign: "center", color: "var(--ink-3)", fontSize: 12 }}>
+                <div className="py-6 px-4 text-center text-fg-3 text-xs">
                   No bets placed yet. Activity appears here in real-time.
                 </div>
               )}
               {activity.map((row, i) => (
                 <div
                   key={i}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "12px 140px 1fr 120px",
-                    alignItems: "center",
-                    padding: "10px 18px",
-                    gap: 16,
-                    borderTop:
-                      i === 0 ? "none" : "1px solid var(--line)",
-                    background: row.mine
-                      ? "var(--bg-2)"
-                      : "transparent",
-                    opacity: 1 - i * 0.04,
-                    transition: "opacity 300ms",
-                  }}
+                  className={`grid grid-cols-[12px_140px_1fr_120px] items-center px-4 py-2.5 gap-4 transition-opacity duration-300 ${
+                    i > 0 ? "border-t border-subtle" : ""
+                  } ${row.mine ? "bg-surface-2" : ""}`}
+                  style={{ opacity: 1 - i * 0.04 }}
                 >
                   <span
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: "50%",
-                      background:
-                        row.side === "YES"
-                          ? "var(--yes)"
-                          : "var(--no)",
-                      display: "inline-block",
-                    }}
+                    className={`w-1.5 h-1.5 rounded-full inline-block ${
+                      row.side === "YES" ? "bg-yes" : "bg-no"
+                    }`}
                   />
-                  <span
-                    className="mono"
-                    style={{
-                      fontSize: 12,
-                      color: "var(--ink-2)",
-                    }}
-                  >
+                  <span className="font-mono text-xs text-fg-2">
                     {row.addr}
                     {row.mine && (
-                      <span
-                        style={{
-                          color: "var(--gold)",
-                          fontSize: 10,
-                          marginLeft: 4,
-                        }}
-                      >
+                      <span className="text-primary text-[10px] ml-1">
                         you
                       </span>
                     )}
                   </span>
-                  <span
-                    className="mono"
-                    style={{
-                      fontSize: 11,
-                      color: "var(--ink-3)",
-                      letterSpacing: "0.06em",
-                    }}
-                  >
+                  <span className="font-mono text-[11px] text-fg-3 tracking-wider">
                     encrypted
                   </span>
-                  <span
-                    className="mono"
-                    style={{
-                      fontSize: 11,
-                      color: "var(--ink-3)",
-                      textAlign: "right",
-                    }}
-                  >
+                  <span className="font-mono text-[11px] text-fg-3 text-right">
                     block {row.block}
                   </span>
                 </div>
@@ -1093,63 +773,33 @@ export default function MarketDetailPage({
         {/* ================================================================
             RIGHT COLUMN -- Trading panel
             ================================================================ */}
-        <aside style={{ position: "sticky", top: 72 }}>
+        <aside className="sticky top-[72px]">
           {/* ── Resolved outcome card ────────────────────────────── */}
           {isMarketResolved && (
-            <GlowCard style={{ padding: 24, marginBottom: 16 }}>
-              <div
-                className="mono"
-                style={{
-                  fontSize: 10,
-                  color: "var(--ink-3)",
-                  letterSpacing: "0.16em",
-                  textTransform: "uppercase",
-                  marginBottom: 12,
-                }}
-              >
+            <GlowCard className="p-6 mb-4">
+              <div className="font-mono text-[10px] text-fg-3 tracking-[0.16em] uppercase mb-3">
                 Resolved
               </div>
-              <div
-                style={{ textAlign: "center", padding: "12px 0" }}
-              >
+              <div className="text-center py-3">
                 <div
-                  className="serif"
-                  style={{
-                    fontSize: 32,
-                    fontWeight: 500,
-                    color:
-                      resolvedLabel === "YES"
-                        ? "var(--yes)"
-                        : resolvedLabel === "NO"
-                          ? "var(--no)"
-                          : "var(--ink-1)",
-                  }}
+                  className={`font-display text-[32px] font-medium ${
+                    resolvedLabel === "YES"
+                      ? "text-yes"
+                      : resolvedLabel === "NO"
+                        ? "text-no"
+                        : "text-fg"
+                  }`}
                 >
                   {resolvedLabel}
                 </div>
 
                 {isConnected && hasPosition && !hasClaimed && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="yes"
+                    size="lg"
                     onClick={handleClaim}
-                    disabled={
-                      claim.isWriting || claim.isConfirming
-                    }
-                    style={{
-                      width: "100%",
-                      marginTop: 20,
-                      padding: "14px 0",
-                      fontSize: 13,
-                      fontWeight: 500,
-                      borderRadius: 4,
-                      color: "#0C1510",
-                      background: "var(--yes)",
-                      border: "none",
-                      cursor:
-                        claim.isWriting || claim.isConfirming
-                          ? "not-allowed"
-                          : "pointer",
-                    }}
+                    disabled={claim.isWriting || claim.isConfirming}
+                    className="w-full mt-5"
                   >
                     {claim.isWriting
                       ? "Submitting..."
@@ -1158,46 +808,23 @@ export default function MarketDetailPage({
                         : claim.isConfirmed
                           ? "Claimed"
                           : "Claim Winnings"}
-                  </button>
+                  </Button>
                 )}
 
                 {isConnected && hasClaimed && (
-                  <div
-                    style={{
-                      marginTop: 16,
-                      display: "flex",
-                      justifyContent: "center",
-                      gap: 6,
-                      color: "var(--yes)",
-                      fontSize: 13,
-                    }}
-                  >
-                    <CheckIcon size={12} /> Winnings claimed
+                  <div className="mt-4 flex justify-center gap-1.5 text-yes text-[13px]">
+                    <Check className="w-3 h-3" /> Winnings claimed
                   </div>
                 )}
 
                 {isConnected && !hasPosition && (
-                  <p
-                    style={{
-                      marginTop: 16,
-                      fontSize: 12,
-                      color: "var(--ink-4)",
-                    }}
-                  >
+                  <p className="mt-4 text-xs text-fg-4">
                     No position in this market.
                   </p>
                 )}
 
                 {claim.error && (
-                  <p
-                    className="mono"
-                    style={{
-                      marginTop: 12,
-                      fontSize: 11,
-                      color: "var(--no)",
-                      wordBreak: "break-all",
-                    }}
-                  >
+                  <p className="font-mono mt-3 text-[11px] text-no break-all">
                     {claim.error.message}
                   </p>
                 )}
@@ -1223,153 +850,60 @@ export default function MarketDetailPage({
                 blocksRemaining !== null && blocksRemaining > 0;
 
               return (
-                <div
-                  style={{
-                    border: "1px solid var(--line)",
-                    borderRadius: 4,
-                    padding: 20,
-                    marginBottom: 16,
-                  }}
-                >
-                  <div
-                    className="mono"
-                    style={{
-                      fontSize: 10,
-                      color: "var(--ink-3)",
-                      letterSpacing: "0.16em",
-                      textTransform: "uppercase",
-                      marginBottom: 14,
-                    }}
-                  >
+                <div className="border border-subtle rounded p-5 mb-4">
+                  <div className="font-mono text-[10px] text-fg-3 tracking-[0.16em] uppercase mb-3.5">
                     Dispute window
                   </div>
                   {isDisputed ? (
-                    <div style={{ textAlign: "center", padding: "8px 0" }}>
-                      <p
-                        style={{
-                          fontSize: 13,
-                          color: "var(--no)",
-                          fontWeight: 500,
-                          marginBottom: 4,
-                        }}
-                      >
+                    <div className="text-center py-2">
+                      <p className="text-[13px] text-no font-medium mb-1">
                         This market has been disputed
                       </p>
-                      <p
-                        style={{
-                          fontSize: 12,
-                          color: "var(--ink-3)",
-                          margin: 0,
-                        }}
-                      >
+                      <p className="text-xs text-fg-3">
                         Resolution is under review by the oracle.
                       </p>
                     </div>
                   ) : windowOpen ? (
                     <div>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          marginBottom: 12,
-                          fontSize: 13,
-                        }}
-                      >
-                        <span style={{ color: "var(--ink-3)" }}>
+                      <div className="flex justify-between mb-3 text-[13px]">
+                        <span className="text-fg-3">
                           Blocks remaining
                         </span>
-                        <span
-                          className="mono"
-                          style={{
-                            color: "var(--ink-1)",
-                            fontWeight: 600,
-                          }}
-                        >
+                        <span className="font-mono text-fg font-semibold">
                           {blocksRemaining!.toLocaleString()}
                         </span>
                       </div>
-                      <div
-                        style={{
-                          width: "100%",
-                          height: 4,
-                          background: "var(--line)",
-                          borderRadius: 2,
-                          marginBottom: 14,
-                          overflow: "hidden",
-                        }}
-                      >
+                      <div className="w-full h-1 bg-surface-3 rounded-sm mb-3.5 overflow-hidden">
                         <div
+                          className="h-full bg-primary rounded-sm transition-[width] duration-300 ease-out"
                           style={{
                             width: `${Math.max(0, Math.min(100, ((Number(window) - blocksRemaining!) / Number(window)) * 100))}%`,
-                            height: "100%",
-                            background: "var(--gold)",
-                            borderRadius: 2,
-                            transition: "width 0.3s ease",
                           }}
                         />
                       </div>
                       {isConnected && (
-                        <button
-                          type="button"
+                        <Button
+                          variant="outline"
+                          className="w-full"
                           onClick={handleRaiseDispute}
-                          disabled={
-                            isDisputeWriting ||
-                            isDisputeConfirming
-                          }
-                          style={{
-                            width: "100%",
-                            padding: "10px 0",
-                            fontSize: 12,
-                            border: "1px solid var(--line-2)",
-                            borderRadius: 4,
-                            color: "var(--ink-1)",
-                            background: "transparent",
-                            cursor:
-                              isDisputeWriting ||
-                              isDisputeConfirming
-                                ? "not-allowed"
-                                : "pointer",
-                          }}
+                          disabled={isDisputeWriting || isDisputeConfirming}
                         >
                           {isDisputeWriting
                             ? "Confirm in wallet..."
                             : isDisputeConfirming
                               ? "Confirming..."
                               : "Raise Dispute"}
-                        </button>
+                        </Button>
                       )}
-                      {(disputeWriteError ||
-                        disputeConfirmError) && (
-                        <p
-                          className="mono"
-                          style={{
-                            fontSize: 11,
-                            color: "var(--no)",
-                            marginTop: 8,
-                            wordBreak: "break-all",
-                          }}
-                        >
-                          {(
-                            disputeWriteError ||
-                            disputeConfirmError
-                          )?.message}
+                      {(disputeWriteError || disputeConfirmError) && (
+                        <p className="font-mono text-[11px] text-no mt-2 break-all">
+                          {(disputeWriteError || disputeConfirmError)?.message}
                         </p>
                       )}
                     </div>
                   ) : (
-                    <div
-                      style={{
-                        textAlign: "center",
-                        padding: "8px 0",
-                      }}
-                    >
-                      <p
-                        style={{
-                          fontSize: 13,
-                          color: "var(--ink-3)",
-                          margin: 0,
-                        }}
-                      >
+                    <div className="text-center py-2">
+                      <p className="text-[13px] text-fg-3">
                         Dispute window closed
                       </p>
                     </div>
@@ -1380,31 +914,17 @@ export default function MarketDetailPage({
 
           {/* ── Betting panel ─────────────────────────────────────── */}
           {!isMarketResolved && (
-            <GlowCard style={{ padding: 24 }}>
+            <GlowCard className="p-6">
               {/* Not connected */}
               {!isConnected && (
-                <p
-                  style={{
-                    textAlign: "center",
-                    padding: "32px 0",
-                    color: "var(--ink-4)",
-                    fontSize: 13,
-                  }}
-                >
+                <p className="text-center py-8 text-fg-4 text-[13px]">
                   Connect wallet to place bets.
                 </p>
               )}
 
               {/* Cancelled */}
               {isConnected && isMarketCancelled && (
-                <p
-                  style={{
-                    textAlign: "center",
-                    padding: "24px 0",
-                    color: "var(--ink-4)",
-                    fontSize: 13,
-                  }}
-                >
+                <p className="text-center py-6 text-fg-4 text-[13px]">
                   This market has been cancelled.
                 </p>
               )}
@@ -1413,17 +933,10 @@ export default function MarketDetailPage({
               {isConnected &&
                 !isMarketOpen &&
                 !isMarketCancelled && (
-                  <div
-                    style={{
-                      textAlign: "center",
-                      padding: "24px 0",
-                      color: "var(--ink-4)",
-                      fontSize: 13,
-                    }}
-                  >
+                  <div className="text-center py-6 text-fg-4 text-[13px]">
                     <p>
                       Market is{" "}
-                      <strong style={{ color: "var(--ink-2)" }}>
+                      <strong className="text-fg-2">
                         {STATUS_LABELS[
                           market.status ?? 0
                         ]?.toLowerCase()}
@@ -1437,14 +950,7 @@ export default function MarketDetailPage({
               {isConnected && isMarketOpen && (
                 <>
                   {/* YES/NO side buttons */}
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: 8,
-                      marginBottom: 20,
-                    }}
-                  >
+                  <div className="grid grid-cols-2 gap-2 mb-5">
                     <SideButton
                       active={side === "YES"}
                       side="YES"
@@ -1462,31 +968,17 @@ export default function MarketDetailPage({
                   </div>
 
                   {/* Amount input */}
-                  <div style={{ marginBottom: 6 }}>
-                    <div
-                      className="mono"
-                      style={{
-                        fontSize: 10,
-                        color: "var(--ink-3)",
-                        letterSpacing: "0.16em",
-                        textTransform: "uppercase",
-                        marginBottom: 8,
-                      }}
-                    >
+                  <div className="mb-1.5">
+                    <div className="font-mono text-[10px] text-fg-3 tracking-[0.16em] uppercase mb-2">
                       Amount
                     </div>
                     <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        border: `1px solid ${isAmountBelowMin ? "var(--no)" : "var(--line-2)"}`,
-                        borderRadius: 4,
-                        padding: "10px 14px",
-                        background: "var(--bg-0)",
-                      }}
+                      className={`flex items-center rounded border px-3.5 py-2.5 bg-background ${
+                        isAmountBelowMin ? "border-no" : "border-strong"
+                      }`}
                     >
                       <input
-                        className="mono"
+                        className="font-mono flex-1 text-2xl text-fg tracking-tight bg-transparent border-none outline-none"
                         value={amount}
                         onChange={(e) => {
                           setAmount(
@@ -1498,49 +990,20 @@ export default function MarketDetailPage({
                           if (betStep !== "idle")
                             setBetStep("idle");
                         }}
-                        style={{
-                          flex: 1,
-                          fontSize: 24,
-                          color: "var(--ink-1)",
-                          letterSpacing: "-0.01em",
-                          background: "transparent",
-                          border: "none",
-                          outline: "none",
-                        }}
                       />
-                      <span
-                        className="mono"
-                        style={{
-                          fontSize: 12,
-                          color: "var(--ink-3)",
-                          flexShrink: 0,
-                          paddingLeft: 0,
-                        }}
-                      >
+                      <span className="font-mono text-xs text-fg-3 shrink-0">
                         cUSDT
                       </span>
                     </div>
                     {isAmountBelowMin && (
-                      <p
-                        style={{
-                          fontSize: 11,
-                          color: "var(--no)",
-                          marginTop: 4,
-                        }}
-                      >
+                      <p className="text-[11px] text-no mt-1">
                         Minimum bet is {minimumBetCUSDT} cUSDT
                       </p>
                     )}
                   </div>
 
                   {/* Quick fill chips */}
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 6,
-                      marginTop: 10,
-                    }}
-                  >
+                  <div className="flex gap-1.5 mt-2.5">
                     {quickAmounts.map((v) => (
                       <button
                         key={v}
@@ -1550,23 +1013,11 @@ export default function MarketDetailPage({
                           if (betStep !== "idle")
                             setBetStep("idle");
                         }}
-                        className="mono"
-                        style={{
-                          flex: 1,
-                          padding: "7px 0",
-                          fontSize: 11,
-                          border: "1px solid var(--line)",
-                          borderRadius: 3,
-                          color:
-                            amount === String(v)
-                              ? "var(--ink-1)"
-                              : "var(--ink-2)",
-                          background:
-                            amount === String(v)
-                              ? "var(--bg-2)"
-                              : "transparent",
-                          cursor: "pointer",
-                        }}
+                        className={`font-mono flex-1 py-[7px] text-[11px] border rounded-sm cursor-pointer transition-colors ${
+                          amount === String(v)
+                            ? "text-fg bg-surface-2 border-strong"
+                            : "text-fg-2 bg-transparent border-subtle hover:border-strong"
+                        }`}
                       >
                         {v}
                       </button>
@@ -1574,52 +1025,19 @@ export default function MarketDetailPage({
                   </div>
 
                   {/* Payout preview */}
-                  <div
-                    style={{
-                      marginTop: 20,
-                      padding: "14px 16px",
-                      background: "var(--bg-0)",
-                      border: "1px solid var(--line)",
-                      borderRadius: 4,
-                    }}
-                  >
-                    <div
-                      className="mono"
-                      style={{
-                        fontSize: 10,
-                        color: "var(--ink-3)",
-                        letterSpacing: "0.16em",
-                        textTransform: "uppercase",
-                        marginBottom: 6,
-                      }}
-                    >
+                  <div className="mt-5 p-3.5 bg-background border border-subtle rounded">
+                    <div className="font-mono text-[10px] text-fg-3 tracking-[0.16em] uppercase mb-1.5">
                       If correct
                     </div>
-                    <div
-                      className="mono"
-                      style={{
-                        fontSize: 16,
-                        color: "var(--ink-1)",
-                      }}
-                    >
+                    <div className="font-mono text-base text-fg">
                       {payout.toFixed(2)}{" "}
-                      <span
-                        style={{
-                          color: "var(--ink-3)",
-                          fontSize: 12,
-                        }}
-                      >
+                      <span className="text-fg-3 text-xs">
                         cUSDT
                       </span>
                       <span
-                        style={{
-                          color:
-                            profit >= 0
-                              ? "var(--yes)"
-                              : "var(--no)",
-                          marginLeft: 10,
-                          fontSize: 13,
-                        }}
+                        className={`ml-2.5 text-[13px] ${
+                          profit >= 0 ? "text-yes" : "text-no"
+                        }`}
                       >
                         {profit >= 0 ? "+" : ""}
                         {profit.toFixed(2)}
@@ -1628,8 +1046,9 @@ export default function MarketDetailPage({
                   </div>
 
                   {/* Submit button */}
-                  <button
-                    type="button"
+                  <Button
+                    variant={side === "YES" ? "yes" : "no"}
+                    size="lg"
                     onClick={handlePlaceBet}
                     disabled={
                       betStep !== "idle" ||
@@ -1638,41 +1057,7 @@ export default function MarketDetailPage({
                       isBetWriting ||
                       isBetConfirming
                     }
-                    style={{
-                      position: "relative",
-                      width: "100%",
-                      marginTop: 16,
-                      padding: "14px 0",
-                      fontSize: 13,
-                      fontWeight: 500,
-                      letterSpacing: "0.02em",
-                      borderRadius: 4,
-                      color:
-                        side === "YES"
-                          ? "#0C1510"
-                          : "#150C0C",
-                      background:
-                        side === "YES"
-                          ? "var(--yes)"
-                          : "var(--no)",
-                      borderLeft: `3px solid ${side === "YES" ? "var(--yes-dim, var(--yes))" : "var(--no-dim, var(--no))"}`,
-                      borderTop: "none",
-                      borderRight: "none",
-                      borderBottom: "none",
-                      opacity:
-                        amountNum <= 0 ||
-                        isAmountBelowMin
-                          ? 0.45
-                          : 1,
-                      cursor:
-                        amountNum <= 0 ||
-                        isAmountBelowMin ||
-                        betStep !== "idle"
-                          ? "not-allowed"
-                          : "pointer",
-                      overflow: "hidden",
-                      transition: "background 200ms",
-                    }}
+                    className="w-full mt-4 font-medium tracking-wide"
                   >
                     {betStep === "encrypting"
                       ? "Encrypting..."
@@ -1686,20 +1071,10 @@ export default function MarketDetailPage({
                             : betStep === "confirmed"
                               ? "Done"
                               : "Place bet"}
-                  </button>
+                  </Button>
 
                   {/* Fee/min info */}
-                  <div
-                    className="mono"
-                    style={{
-                      marginTop: 14,
-                      fontSize: 10,
-                      color: "var(--ink-3)",
-                      textAlign: "center",
-                      letterSpacing: "0.1em",
-                      textTransform: "uppercase",
-                    }}
-                  >
+                  <div className="font-mono mt-3.5 text-[10px] text-fg-3 text-center tracking-wider uppercase">
                     Fee 0% &middot; Min{" "}
                     {minimumBetCUSDT > 0
                       ? minimumBetCUSDT
@@ -1709,64 +1084,29 @@ export default function MarketDetailPage({
 
                   {/* Error state */}
                   {betStep === "error" && (
-                    <div
-                      style={{
-                        marginTop: 12,
-                        padding: "10px 14px",
-                        border: "1px solid var(--no)",
-                        borderRadius: 4,
-                        fontSize: 12,
-                      }}
-                    >
-                      <p
-                        style={{
-                          color: "var(--no)",
-                          fontWeight: 500,
-                          marginBottom: 6,
-                        }}
-                      >
+                    <div className="mt-3 p-3.5 border border-no rounded text-xs">
+                      <p className="text-no font-medium mb-1.5 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5" />
                         {fhe.error ||
                           bet.error?.message ||
                           "Something went wrong"}
                       </p>
-                      <button
-                        type="button"
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => {
                           setBetStep("idle");
                           fhe.reset();
                         }}
-                        style={{
-                          fontSize: 11,
-                          color: "var(--ink-2)",
-                          border: "1px solid var(--line)",
-                          borderRadius: 3,
-                          padding: "4px 10px",
-                          background: "transparent",
-                          cursor: "pointer",
-                        }}
                       >
                         Retry
-                      </button>
+                      </Button>
                     </div>
                   )}
 
                   {bet.error && betStep !== "error" && (
-                    <div
-                      style={{
-                        marginTop: 12,
-                        padding: "10px 14px",
-                        border: "1px solid var(--no)",
-                        borderRadius: 4,
-                      }}
-                    >
-                      <p
-                        className="mono"
-                        style={{
-                          fontSize: 11,
-                          color: "var(--no)",
-                          wordBreak: "break-all",
-                        }}
-                      >
+                    <div className="mt-3 p-3.5 border border-no rounded">
+                      <p className="font-mono text-[11px] text-no break-all">
                         {bet.error.message}
                       </p>
                     </div>

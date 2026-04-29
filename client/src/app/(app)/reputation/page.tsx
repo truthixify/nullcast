@@ -4,31 +4,20 @@ import React, { useState, useEffect, useRef } from "react";
 import { useAccount } from "wagmi";
 import { useReputation } from "@/hooks/useReputation";
 import { useMintCUSDT } from "@/hooks/useCUSDT";
-import { Icon } from "@/components/shared/Icons";
 import { getTierFromScore } from "@/constants/tiers";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
 
-/* ── Score page (reputation) ─────────────────────────────────── */
 export default function ScorePage() {
   const { address, isConnected } = useAccount();
-  const {
-    hasScore,
-    participation,
-    isLoading: isRepLoading,
-  } = useReputation(address);
-
-  const {
-    mint,
-    isWriting: isMintWriting,
-    isConfirming: isMintConfirming,
-    isConfirmed: isMintConfirmed,
-  } = useMintCUSDT();
+  const { hasScore, participation, isLoading: isRepLoading } = useReputation(address);
+  const { mint, isWriting: isMintWriting, isConfirming: isMintConfirming, isConfirmed: isMintConfirmed } = useMintCUSDT();
 
   const handleMint = () => {
     if (!address) return;
     mint(address, BigInt(10_000_000_000));
   };
 
-  /* ── Score animation ───────────────────────────────────────── */
   const demoScore = hasScore ? 72 : 0;
   const [animatedScore, setAnimatedScore] = useState(0);
 
@@ -52,100 +41,65 @@ export default function ScorePage() {
   const C = 2 * Math.PI * 80;
   const progress = demoScore / 100;
 
-  /* ── Tier info ─────────────────────────────────────────────── */
   const currentTier = hasScore ? getTierFromScore(demoScore) : null;
   const tierNames = ["Explorer", "Analyst", "Strategist", "Oracle"];
-  const tierIndex = currentTier
-    ? tierNames.indexOf(currentTier.name)
-    : -1;
+  const tierIndex = currentTier ? tierNames.indexOf(currentTier.name) : -1;
 
-  /* ── Score components (synthetic from on-chain data) ────────── */
   const components = [
-    { label: "Participation", value: participation, unit: "", bar: Math.min(participation / 20 * 100, 100) },
-    { label: "Wallet age", value: hasScore ? 1 : 0, unit: "", bar: hasScore ? 100 : 0 },
-    { label: "Tx history", value: hasScore ? 1 : 0, unit: "", bar: hasScore ? 80 : 0 },
-    { label: "Resolution accuracy", value: hasScore ? 1 : 0, unit: "", bar: hasScore ? 60 : 0 },
+    { label: "Participation", value: participation, bar: Math.min(participation / 20 * 100, 100) },
+    { label: "Wallet age", value: hasScore ? 1 : 0, bar: hasScore ? 100 : 0 },
+    { label: "Tx history", value: hasScore ? 1 : 0, bar: hasScore ? 80 : 0 },
+    { label: "Resolution accuracy", value: hasScore ? 1 : 0, bar: hasScore ? 60 : 0 },
   ];
 
   if (isRepLoading) {
     return (
-      <div className="page-in" style={{ maxWidth: 980, margin: "0 auto", padding: "44px 48px 80px" }}>
-        <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--ink-3)", fontSize: 13 }}>
-          Loading reputation data...
-        </div>
+      <div className="max-w-[980px] mx-auto px-4 sm:px-6 py-8 sm:py-10 animate-fade-in">
+        <div className="py-16 text-center text-fg-3 text-sm">Loading reputation data...</div>
       </div>
     );
   }
 
   return (
-    <div className="page-in" style={{ maxWidth: 980, margin: "0 auto", padding: "44px 48px 80px" }}>
+    <div className="max-w-[980px] mx-auto px-4 sm:px-6 py-8 sm:py-10 animate-fade-in">
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 36 }}>
-        <h1 className="serif" style={{ fontSize: 38, fontWeight: 500, letterSpacing: "-0.02em" }}>
-          Score
-        </h1>
-        <button
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
+        <div>
+          <span className="section-numeral text-xl sm:text-2xl">§ Score</span>
+          <h1 className="font-display text-3xl sm:text-4xl text-fg mt-1">Your reputation</h1>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={handleMint}
           disabled={!isConnected || !address || isMintWriting || isMintConfirming}
-          style={{
-            fontSize: 11,
-            padding: "7px 12px",
-            border: "1px solid var(--line-2)",
-            borderRadius: 3,
-            color: isMintConfirmed ? "var(--yes)" : "var(--ink-2)",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            background: "transparent",
-            cursor: "pointer",
-          }}
+          className={isMintConfirmed ? "text-yes border-yes/30" : ""}
         >
-          <Icon name="plus" size={11} />
+          <Plus className="w-3 h-3" />
           {isMintWriting ? "Confirm..." : isMintConfirming ? "Minting..." : isMintConfirmed ? "Minted" : "Mint test cUSDT"}
-        </button>
+        </Button>
       </div>
 
       {/* Hero score ring */}
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: 48 }}>
-        <div style={{ position: "relative", width: 220, height: 220 }}>
+      <div className="flex justify-center mb-12">
+        <div className="relative w-[220px] h-[220px]">
           <svg width="220" height="220" viewBox="0 0 200 200">
-            <circle cx="100" cy="100" r="80" fill="none" stroke="var(--line-2)" strokeWidth="1.5" />
+            <circle cx="100" cy="100" r="80" fill="none" stroke="hsl(var(--border) / 0.08)" strokeWidth="1.5" />
             <circle
               cx="100" cy="100" r="80" fill="none"
-              stroke="var(--gold)" strokeWidth="2"
+              stroke="hsl(var(--primary))" strokeWidth="2"
               strokeDasharray={`${C * progress} ${C}`}
               transform="rotate(-90 100 100)"
               strokeLinecap="round"
-              style={{
-                transition: "stroke-dasharray 1200ms cubic-bezier(0.22, 1, 0.36, 1)",
-                filter: "drop-shadow(0 0 8px rgba(212,168,67,0.4))",
-              }}
+              className="transition-all duration-[1200ms] ease-out"
+              style={{ filter: "drop-shadow(0 0 8px hsl(var(--primary) / 0.4))" }}
             />
           </svg>
-          <div style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-          }}>
-            <div className="mono" style={{
-              fontSize: 64,
-              color: "var(--gold)",
-              fontWeight: 500,
-              letterSpacing: "-0.03em",
-              lineHeight: 1,
-            }}>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <div className="font-mono tnum text-[64px] text-primary font-medium tracking-tighter leading-none">
               {animatedScore}
             </div>
-            <div className="mono" style={{
-              fontSize: 10,
-              color: "var(--ink-3)",
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-              marginTop: 8,
-            }}>
+            <div className="font-mono text-[10px] text-fg-3 tracking-[0.2em] uppercase mt-2">
               {currentTier?.name ?? "Unranked"}
             </div>
           </div>
@@ -153,34 +107,20 @@ export default function ScorePage() {
       </div>
 
       {/* Tier scale */}
-      <div style={{ marginBottom: 56 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 4, marginBottom: 10 }}>
+      <div className="mb-14">
+        <div className="grid grid-cols-4 gap-1 mb-2.5">
           {tierNames.map((t, i) => (
             <div
               key={t}
-              style={{
-                height: 4,
-                borderRadius: 1,
-                background: i <= tierIndex ? "var(--gold)" : "var(--bg-3)",
-                opacity: i === tierIndex ? 1 : i < tierIndex ? 0.7 : 1,
-              }}
+              className={`h-1 rounded-sm transition-colors ${
+                i <= tierIndex ? "bg-primary" : "bg-surface-3"
+              } ${i < tierIndex ? "opacity-70" : ""}`}
             />
           ))}
         </div>
-        <div
-          className="mono"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: 4,
-            fontSize: 10,
-            color: "var(--ink-3)",
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-          }}
-        >
+        <div className="grid grid-cols-4 gap-1 font-mono text-[10px] tracking-[0.1em] uppercase">
           {tierNames.map((t, i) => (
-            <span key={t} style={{ color: i === tierIndex ? "var(--gold)" : "var(--ink-3)" }}>
+            <span key={t} className={i === tierIndex ? "text-primary" : "text-fg-3"}>
               {t}
             </span>
           ))}
@@ -188,23 +128,17 @@ export default function ScorePage() {
       </div>
 
       {/* Components — progress bars */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <div className="space-y-5">
         {components.map((c) => (
           <div key={c.label}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-              <span style={{ fontSize: 13, color: "var(--ink-1)" }}>{c.label}</span>
-              <span className="mono" style={{ fontSize: 13, color: "var(--ink-1)" }}>
-                {c.value}{c.unit}
-              </span>
+            <div className="flex justify-between items-baseline mb-2">
+              <span className="text-[13px] text-fg">{c.label}</span>
+              <span className="font-mono text-[13px] text-fg">{c.value}</span>
             </div>
-            <div style={{ height: 4, borderRadius: 1, background: "var(--bg-3)", overflow: "hidden" }}>
+            <div className="h-1 rounded-sm bg-surface-3 overflow-hidden">
               <div
-                style={{
-                  width: `${c.bar}%`,
-                  height: "100%",
-                  background: "linear-gradient(90deg, var(--gold-dim), var(--gold))",
-                  transition: "width 600ms ease-out",
-                }}
+                className="h-full bg-gradient-to-r from-primary/60 to-primary rounded-sm transition-[width] duration-500 ease-out"
+                style={{ width: `${c.bar}%` }}
               />
             </div>
           </div>
