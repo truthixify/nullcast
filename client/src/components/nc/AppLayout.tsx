@@ -3,15 +3,18 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAccount, useReadContract } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { Wallet } from "lucide-react";
 import { CommandPalette } from "@/components/nc/CommandPalette";
 import { Logo } from "@/components/nc/Logo";
 import { TickerRail } from "@/components/nc/TickerRail";
 import { BottomNav } from "@/components/nc/BottomNav";
 import { ShortcutsModal } from "@/components/nc/ShortcutsModal";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { Menu, Search, Plus, Settings as SettingsIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { mockcUSDTConfig } from "@/lib/contracts";
+import { useMintCUSDT } from "@/hooks/useCUSDT";
+import { Menu, Search, Plus, Settings as SettingsIcon, Wallet, Copy, ExternalLink, LogOut, Coins } from "lucide-react";
 
 const NAV = [
   { to: "/markets",   label: "Markets" },
@@ -22,19 +25,127 @@ const NAV = [
   { to: "/activity",  label: "Activity" },
 ];
 
+function WalletSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { address } = useAccount();
+  const { mint, isWriting, isConfirming, isConfirmed } = useMintCUSDT();
+  const [copied, setCopied] = useState(false);
+
+  const { data: balanceRaw } = useReadContract({
+    ...mockcUSDTConfig,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address, refetchInterval: 10_000 },
+  });
+
+  const balance = balanceRaw ? (Number(balanceRaw) / 1e6) : 0;
+
+  const handleCopy = () => {
+    if (!address) return;
+    navigator.clipboard.writeText(address);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const handleMint = () => {
+    if (!address) return;
+    mint(address, BigInt(10_000_000_000));
+  };
+
+  const truncated = address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "";
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-[340px] bg-background border-l border-subtle p-0">
+        <div className="p-5 border-b border-subtle">
+          <div className="font-display text-base text-fg">Wallet</div>
+        </div>
+
+        <div className="p-5 space-y-6">
+          {/* Address */}
+          <div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-fg-3 mb-2">Address</div>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-sm text-fg">{truncated}</span>
+              <button onClick={handleCopy} className="h-6 w-6 inline-flex items-center justify-center text-fg-3 hover:text-fg transition-colors">
+                <Copy className="h-3 w-3" />
+              </button>
+              {copied && <span className="font-mono text-[10px] text-yes">Copied</span>}
+            </div>
+          </div>
+
+          {/* cUSDT Balance */}
+          <div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-fg-3 mb-2">cUSDT Balance</div>
+            <div className="font-mono tnum text-3xl text-primary">
+              {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="font-mono text-[10px] text-fg-4 mt-1">ERC-7984 · encrypted on-chain</div>
+          </div>
+
+          {/* Quick actions */}
+          <div className="space-y-2">
+            <Button variant="primary" className="w-full" onClick={handleMint}
+              disabled={isWriting || isConfirming}>
+              <Coins className="h-3.5 w-3.5" />
+              {isWriting ? "Confirm in wallet..." : isConfirming ? "Minting..." : isConfirmed ? "Minted 10B cUSDT" : "Mint test cUSDT"}
+            </Button>
+
+            {address && (
+              <Button variant="outline" className="w-full" asChild>
+                <a href={`https://sepolia.etherscan.io/address/${address}`} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-3.5 w-3.5" /> View on Etherscan
+                </a>
+              </Button>
+            )}
+          </div>
+
+          {/* Network info */}
+          <div className="pt-4 border-t border-subtle">
+            <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-fg-3 mb-2">Network</div>
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-yes" />
+              <span className="font-mono text-sm text-fg">Sepolia Testnet</span>
+            </div>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function CUSDTBalance() {
+  const { address } = useAccount();
+  const { data: balanceRaw } = useReadContract({
+    ...mockcUSDTConfig,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address, refetchInterval: 15_000 },
+  });
+  const balance = balanceRaw ? (Number(balanceRaw) / 1e6) : 0;
+  if (!address) return null;
+  return (
+    <span className="font-mono text-primary tnum">
+      {balance >= 1_000_000 ? `${(balance / 1_000_000).toFixed(1)}M` :
+       balance >= 1_000 ? `${(balance / 1_000).toFixed(1)}k` :
+       balance.toFixed(0)}
+    </span>
+  );
+}
+
 export const AppLayout = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
   const [navOpen, setNavOpen] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <CommandPalette />
       <ShortcutsModal />
+      <WalletSheet open={walletOpen} onOpenChange={setWalletOpen} />
 
       {/* Top bar */}
       <header className="sticky top-0 z-40 border-b border-subtle bg-background/85 backdrop-blur-xl">
         <div className="max-w-[1280px] mx-auto h-14 px-4 sm:px-6 flex items-center gap-3 sm:gap-8">
-          {/* Mobile menu */}
           <button
             onClick={() => setNavOpen(true)}
             className="lg:hidden h-9 w-9 -ml-2 inline-flex items-center justify-center text-fg-2 hover:text-fg transition-colors"
@@ -89,7 +200,7 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
             </Link>
 
             <ConnectButton.Custom>
-              {({ account, chain, openAccountModal, openChainModal, openConnectModal, mounted }) => {
+              {({ account, chain, openChainModal, openConnectModal, mounted }) => {
                 const connected = mounted && account && chain;
                 return (
                   <div {...(!mounted && { "aria-hidden": true, style: { opacity: 0, pointerEvents: "none", userSelect: "none" } })}>
@@ -123,13 +234,11 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
                           )}
                         </button>
                         <button
-                          onClick={openAccountModal}
+                          onClick={() => setWalletOpen(true)}
                           className="flex items-center gap-2 h-8 px-2.5 sm:px-3 rounded bg-surface-2 border border-subtle hover:border-strong transition-colors text-xs"
                         >
                           <span className="font-mono text-fg-2 hidden sm:inline">{account.displayName}</span>
-                          {account.displayBalance && (
-                            <span className="font-mono text-primary tnum">{account.displayBalance}</span>
-                          )}
+                          <CUSDTBalance />
                         </button>
                       </div>
                     )}
