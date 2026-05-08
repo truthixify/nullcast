@@ -161,7 +161,7 @@ export default function LandingPage() {
             </p>
             <div className="mt-10 flex items-center gap-3">
               <Button asChild variant="primary" size="xl"><Link href="/markets">Trade now</Link></Button>
-              <Button asChild variant="outline" size="xl"><Link href="/markets">View markets</Link></Button>
+              <Button asChild variant="outline" size="xl"><Link href="/vaults">Copy strategies</Link></Button>
             </div>
             <div className="mt-10 flex items-center gap-6 font-mono text-[11px] text-fg-3">
               <span className="flex items-center gap-2"><span className="live-dot" /> Live</span>
