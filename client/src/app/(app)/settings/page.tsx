@@ -45,7 +45,7 @@ export default function SettingsPage() {
       </div>
 
       <Section title="Accent" desc="The colour of value across the app.">
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-3 gap-3">
           {ACCENTS.map((a) => {
             const active = s.accent === a.id;
             return (

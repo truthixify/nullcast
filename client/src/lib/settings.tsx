@@ -7,7 +7,7 @@
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
-export type Accent = "gold" | "sage" | "terracotta";
+export type Accent = "gold" | "sage" | "terracotta" | "violet" | "cyan" | "rose" | "amber" | "emerald" | "slate";
 export type Currency = "USD" | "EUR" | "GBP";
 export type Lang = "en" | "es" | "fr";
 
@@ -15,11 +15,25 @@ const ACCENT_HSL: Record<Accent, string> = {
   gold:       "42 62% 55%",
   sage:       "138 28% 52%",
   terracotta: "14 55% 58%",
+  // ── additional accents (remove block to revert) ──
+  violet:     "262 52% 58%",
+  cyan:       "188 65% 48%",
+  rose:       "340 55% 58%",
+  amber:      "32 80% 52%",
+  emerald:    "160 55% 42%",
+  slate:      "215 16% 55%",
 };
 const ACCENT_GLOW: Record<Accent, string> = {
   gold:       "42 75% 65%",
   sage:       "138 38% 62%",
   terracotta: "14 70% 68%",
+  // ── additional accents (remove block to revert) ──
+  violet:     "262 62% 68%",
+  cyan:       "188 75% 58%",
+  rose:       "340 65% 68%",
+  amber:      "32 90% 62%",
+  emerald:    "160 65% 52%",
+  slate:      "215 22% 65%",
 };
 
 interface SettingsState {
@@ -105,4 +119,11 @@ export const ACCENTS: { id: Accent; label: string; hsl: string }[] = [
   { id: "gold",       label: "Gold",       hsl: ACCENT_HSL.gold },
   { id: "sage",       label: "Sage",       hsl: ACCENT_HSL.sage },
   { id: "terracotta", label: "Terracotta", hsl: ACCENT_HSL.terracotta },
+  // ── additional accents (remove block to revert) ──
+  { id: "violet",     label: "Violet",     hsl: ACCENT_HSL.violet },
+  { id: "cyan",       label: "Cyan",       hsl: ACCENT_HSL.cyan },
+  { id: "rose",       label: "Rose",       hsl: ACCENT_HSL.rose },
+  { id: "amber",      label: "Amber",      hsl: ACCENT_HSL.amber },
+  { id: "emerald",    label: "Emerald",    hsl: ACCENT_HSL.emerald },
+  { id: "slate",      label: "Slate",      hsl: ACCENT_HSL.slate },
 ];
