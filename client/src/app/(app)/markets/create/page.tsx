@@ -7,7 +7,7 @@ import { useAccount, useBlockNumber } from "wagmi";
 import { stringToHex } from "viem";
 import { useCreateMarket } from "@/hooks/useFactory";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Check, ExternalLink, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, Loader2, Plus, X } from "lucide-react";
 
 const CATEGORY_OPTIONS = ["CRYPTO", "MACRO", "EQUITY", "SPORTS", "TECH", "OTHER"] as const;
 const SEPOLIA_BLOCK_TIME_SECONDS = 12;
@@ -36,8 +36,27 @@ export default function CreateMarketPage() {
   const [expiry, setExpiry] = useState("");
   const [minimumBet, setMinimumBet] = useState("1");
   const [marketType, setMarketType] = useState<"binary" | "scalar">("binary");
-  const [bucketCount, setBucketCount] = useState("3");
   const [category, setCategory] = useState<typeof CATEGORY_OPTIONS[number]>("CRYPTO");
+
+  // Scalar bucket options — each is a label for an outcome
+  const [bucketLabels, setBucketLabels] = useState<string[]>(["", "", ""]);
+  const [newBucket, setNewBucket] = useState("");
+
+  const addBucket = () => {
+    const label = newBucket.trim();
+    if (!label || bucketLabels.length >= 10) return;
+    setBucketLabels([...bucketLabels, label]);
+    setNewBucket("");
+  };
+
+  const removeBucket = (index: number) => {
+    if (bucketLabels.length <= 2) return;
+    setBucketLabels(bucketLabels.filter((_, i) => i !== index));
+  };
+
+  const updateBucket = (index: number, value: string) => {
+    setBucketLabels(bucketLabels.map((l, i) => i === index ? value : l));
+  };
 
   const expiryBlock = useMemo(() => {
     if (!expiry || !currentBlock) return undefined;
@@ -53,13 +72,20 @@ export default function CreateMarketPage() {
     return BigInt(Math.floor(parsed * 1e6));
   }, [minimumBet]);
 
-  const isFormValid = question.trim().length > 0 && !!expiryBlock && !!minimumBetInBaseUnits &&
-    (marketType === "binary" || (marketType === "scalar" && parseInt(bucketCount) >= 2));
+  const scalarValid = marketType === "scalar"
+    ? bucketLabels.length >= 2 && bucketLabels.every((l) => l.trim().length > 0)
+    : true;
+
+  const isFormValid = question.trim().length > 0 && !!expiryBlock && !!minimumBetInBaseUnits && scalarValid;
 
   const handleSubmit = () => {
     if (!isFormValid || !expiryBlock || !minimumBetInBaseUnits) return;
-    const buckets = marketType === "scalar" ? parseInt(bucketCount) : 0;
-    createMarket(question.trim(), expiryBlock, minimumBetInBaseUnits, buckets, stringToHex(category, { size: 32 }));
+    const buckets = marketType === "scalar" ? bucketLabels.length : 0;
+    // For scalar, append bucket labels to the question so they're stored on-chain
+    const fullQuestion = marketType === "scalar"
+      ? `${question.trim()} [${bucketLabels.map((l) => l.trim()).join(" | ")}]`
+      : question.trim();
+    createMarket(fullQuestion, expiryBlock, minimumBetInBaseUnits, buckets, stringToHex(category, { size: 32 }));
   };
 
   if (isConfirmed) setTimeout(() => router.push("/markets"), 2000);
@@ -78,15 +104,6 @@ export default function CreateMarketPage() {
       </div>
 
       <div className="space-y-6">
-        {/* Question */}
-        <div>
-          <label className="font-mono text-[10px] tracking-[0.12em] uppercase text-fg-3 block mb-1.5">Market question *</label>
-          <input type="text" placeholder="Will [event] happen by [date]?" value={question}
-            onChange={(e) => setQuestion(e.target.value)} disabled={txState !== "idle"}
-            className="w-full px-3 py-2.5 text-sm bg-transparent border border-subtle rounded text-fg outline-none focus:border-strong transition-colors" />
-          <span className="font-mono text-[10px] text-fg-4 mt-1 block">Write a clear yes/no question. Ambiguous questions may be disputed.</span>
-        </div>
-
         {/* Market type */}
         <div>
           <label className="font-mono text-[10px] tracking-[0.12em] uppercase text-fg-3 block mb-1.5">Market type</label>
@@ -95,6 +112,75 @@ export default function CreateMarketPage() {
             <TypeTile title="Scalar" sub="Multiple outcome buckets" active={marketType === "scalar"} disabled={txState !== "idle"} onClick={() => setMarketType("scalar")} />
           </div>
         </div>
+
+        {/* Question */}
+        <div>
+          <label className="font-mono text-[10px] tracking-[0.12em] uppercase text-fg-3 block mb-1.5">Market question *</label>
+          <input type="text"
+            placeholder={marketType === "binary" ? "Will [event] happen by [date]?" : "What will [metric] be by [date]?"}
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)} disabled={txState !== "idle"}
+            className="w-full px-3 py-2.5 text-sm bg-transparent border border-subtle rounded text-fg outline-none focus:border-strong transition-colors" />
+          <span className="font-mono text-[10px] text-fg-4 mt-1 block">
+            {marketType === "binary"
+              ? "Write a clear yes/no question. Ambiguous questions may be disputed."
+              : "Write the question. Outcome options are defined below."}
+          </span>
+        </div>
+
+        {/* Scalar outcome options */}
+        {marketType === "scalar" && (
+          <div>
+            <label className="font-mono text-[10px] tracking-[0.12em] uppercase text-fg-3 block mb-1.5">
+              Outcome options * <span className="text-fg-4">({bucketLabels.length} of 10 max)</span>
+            </label>
+            <div className="space-y-2">
+              {bucketLabels.map((label, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="font-mono text-[10px] text-fg-4 w-5 shrink-0 text-center">{i + 1}</span>
+                  <input
+                    type="text"
+                    placeholder={`Option ${i + 1}${i === 0 ? " (e.g. $50k–$75k)" : i === 1 ? " (e.g. $75k–$100k)" : ""}`}
+                    value={label}
+                    onChange={(e) => updateBucket(i, e.target.value)}
+                    disabled={txState !== "idle"}
+                    className="flex-1 px-3 py-2 text-sm bg-transparent border border-subtle rounded text-fg outline-none focus:border-strong transition-colors"
+                  />
+                  {bucketLabels.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => removeBucket(i)}
+                      disabled={txState !== "idle"}
+                      className="h-8 w-8 inline-flex items-center justify-center rounded border border-subtle hover:border-no text-fg-3 hover:text-no transition-colors shrink-0"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {bucketLabels.length < 10 && (
+              <div className="flex items-center gap-2 mt-2">
+                <span className="w-5 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Add another option..."
+                  value={newBucket}
+                  onChange={(e) => setNewBucket(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addBucket(); } }}
+                  disabled={txState !== "idle"}
+                  className="flex-1 px-3 py-2 text-sm bg-transparent border border-dashed border-subtle rounded text-fg outline-none focus:border-strong transition-colors"
+                />
+                <Button variant="outline" size="sm" onClick={addBucket} disabled={txState !== "idle" || !newBucket.trim()}>
+                  <Plus className="w-3 h-3" /> Add
+                </Button>
+              </div>
+            )}
+            <span className="font-mono text-[10px] text-fg-4 mt-1.5 block">
+              Minimum 2 options. Users bet on which bucket the outcome falls into.
+            </span>
+          </div>
+        )}
 
         {/* Category */}
         <div>
@@ -108,17 +194,6 @@ export default function CreateMarketPage() {
             ))}
           </div>
         </div>
-
-        {/* Scalar bucket count */}
-        {marketType === "scalar" && (
-          <div>
-            <label className="font-mono text-[10px] tracking-[0.12em] uppercase text-fg-3 block mb-1.5">Bucket count</label>
-            <input type="number" value={bucketCount} onChange={(e) => setBucketCount(e.target.value)}
-              disabled={txState !== "idle"} min="2" max="10" step="1" placeholder="3"
-              className="w-[120px] px-3 py-2.5 text-sm bg-transparent border border-subtle rounded text-fg outline-none font-mono" />
-            <span className="font-mono text-[10px] text-fg-4 mt-1 block">Number of outcome buckets (2-10)</span>
-          </div>
-        )}
 
         {/* Expiry + Min bet */}
         <div className="grid grid-cols-2 gap-4">
@@ -139,6 +214,21 @@ export default function CreateMarketPage() {
             </div>
           </div>
         </div>
+
+        {/* Preview */}
+        {marketType === "scalar" && bucketLabels.some((l) => l.trim()) && (
+          <div className="border border-subtle rounded p-4 bg-surface-1/50">
+            <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-fg-3 mb-2">Preview</div>
+            <div className="font-display text-sm text-fg mb-3">{question || "Your question here"}</div>
+            <div className="flex flex-wrap gap-1.5">
+              {bucketLabels.filter((l) => l.trim()).map((label, i) => (
+                <span key={i} className="font-mono text-[11px] px-2.5 py-1 rounded border border-subtle text-fg-2">
+                  #{i}: {label}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="border-b border-subtle" />
 
