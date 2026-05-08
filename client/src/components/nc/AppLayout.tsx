@@ -3,16 +3,13 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { Wallet } from "lucide-react";
 import { CommandPalette } from "@/components/nc/CommandPalette";
 import { Logo } from "@/components/nc/Logo";
 import { TickerRail } from "@/components/nc/TickerRail";
-import { PnLDock } from "@/components/nc/PnLDock";
-import { WalletDrawer } from "@/components/nc/WalletDrawer";
-import { NotificationsBell } from "@/components/nc/NotificationsBell";
 import { BottomNav } from "@/components/nc/BottomNav";
 import { ShortcutsModal } from "@/components/nc/ShortcutsModal";
-import { Onboarding } from "@/components/nc/Onboarding";
-import { useWallet } from "@/lib/wallet";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Menu, Search, Plus, Settings as SettingsIcon } from "lucide-react";
 
@@ -21,21 +18,18 @@ const NAV = [
   { to: "/portfolio", label: "Portfolio" },
   { to: "/vaults",    label: "Vaults" },
   { to: "/liquidity", label: "Liquidity" },
-  { to: "/score",     label: "Score" },
+  { to: "/reputation", label: "Score" },
   { to: "/activity",  label: "Activity" },
 ];
 
 export const AppLayout = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
-  const wallet = useWallet();
   const [navOpen, setNavOpen] = useState(false);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <CommandPalette />
-      <WalletDrawer />
       <ShortcutsModal />
-      <Onboarding />
 
       {/* Top bar */}
       <header className="sticky top-0 z-40 border-b border-subtle bg-background/85 backdrop-blur-xl">
@@ -86,8 +80,6 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
               <kbd className="hidden md:inline font-mono text-[10px] px-1.5 py-0.5 rounded bg-surface-2 border border-subtle">⌘K</kbd>
             </button>
 
-            <NotificationsBell />
-
             <Link
               href="/settings"
               className="hidden sm:inline-flex h-8 w-8 items-center justify-center rounded border border-subtle hover:border-strong text-fg-3 hover:text-fg transition-colors"
@@ -96,16 +88,55 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
               <SettingsIcon className="h-3.5 w-3.5" />
             </Link>
 
-            <button
-              onClick={() => wallet.openWallet("deposit")}
-              className="flex items-center gap-2 h-8 px-2.5 sm:px-3 rounded bg-surface-2 border border-subtle hover:border-strong transition-colors text-xs"
-              aria-label={`Wallet · ${wallet.balance.toFixed(0)} cUSDT`}
-            >
-              <span className="font-mono text-fg-2 hidden sm:inline">{wallet.address}</span>
-              <span className="font-mono text-primary tnum">
-                {wallet.balance.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-              </span>
-            </button>
+            <ConnectButton.Custom>
+              {({ account, chain, openAccountModal, openChainModal, openConnectModal, mounted }) => {
+                const connected = mounted && account && chain;
+                return (
+                  <div {...(!mounted && { "aria-hidden": true, style: { opacity: 0, pointerEvents: "none", userSelect: "none" } })}>
+                    {!connected ? (
+                      <button
+                        onClick={openConnectModal}
+                        className="flex items-center gap-2 h-8 px-3 rounded bg-primary text-primary-foreground text-xs font-medium hover:brightness-110 transition-all"
+                      >
+                        <Wallet className="h-3.5 w-3.5" />
+                        Connect
+                      </button>
+                    ) : chain.unsupported ? (
+                      <button
+                        onClick={openChainModal}
+                        className="flex items-center gap-2 h-8 px-3 rounded bg-no/20 text-no border border-no/30 text-xs font-medium"
+                      >
+                        Wrong network
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={openChainModal}
+                          className="h-8 w-8 rounded border border-subtle hover:border-strong flex items-center justify-center transition-colors"
+                          aria-label={chain.name}
+                        >
+                          {chain.iconUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={chain.iconUrl} alt={chain.name ?? ""} className="h-4 w-4 rounded-full" />
+                          ) : (
+                            <span className="h-2 w-2 rounded-full bg-yes" />
+                          )}
+                        </button>
+                        <button
+                          onClick={openAccountModal}
+                          className="flex items-center gap-2 h-8 px-2.5 sm:px-3 rounded bg-surface-2 border border-subtle hover:border-strong transition-colors text-xs"
+                        >
+                          <span className="font-mono text-fg-2 hidden sm:inline">{account.displayName}</span>
+                          {account.displayBalance && (
+                            <span className="font-mono text-primary tnum">{account.displayBalance}</span>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              }}
+            </ConnectButton.Custom>
           </div>
         </div>
       </header>
@@ -132,27 +163,9 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
                 {n.label}
               </Link>
             ))}
-            <Link
-              href="/search"
-              onClick={() => setNavOpen(false)}
-              className="px-4 py-3 rounded text-sm text-fg-3 hover:text-fg-2 hover:bg-surface-1 transition-colors"
-            >
-              Search
-            </Link>
-            <Link
-              href="/settings"
-              onClick={() => setNavOpen(false)}
-              className="px-4 py-3 rounded text-sm text-fg-3 hover:text-fg-2 hover:bg-surface-1 transition-colors"
-            >
-              Settings
-            </Link>
-            <Link
-              href="/markets/create"
-              onClick={() => setNavOpen(false)}
-              className="px-4 py-3 rounded text-sm text-primary hover:bg-surface-2 transition-colors mt-2 border-t border-subtle"
-            >
-              + New market
-            </Link>
+            <Link href="/search" onClick={() => setNavOpen(false)} className="px-4 py-3 rounded text-sm text-fg-3 hover:text-fg-2 hover:bg-surface-1 transition-colors">Search</Link>
+            <Link href="/settings" onClick={() => setNavOpen(false)} className="px-4 py-3 rounded text-sm text-fg-3 hover:text-fg-2 hover:bg-surface-1 transition-colors">Settings</Link>
+            <Link href="/markets/create" onClick={() => setNavOpen(false)} className="px-4 py-3 rounded text-sm text-primary hover:bg-surface-2 transition-colors mt-2 border-t border-subtle">+ New market</Link>
           </nav>
         </SheetContent>
       </Sheet>
@@ -161,7 +174,6 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
         {children}
       </main>
 
-      <PnLDock />
       <BottomNav />
       <TickerRail />
 

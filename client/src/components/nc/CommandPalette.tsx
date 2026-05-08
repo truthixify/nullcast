@@ -3,14 +3,24 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
-import { MARKETS } from "@/data/markets";
-import { useWallet } from "@/lib/wallet";
-import { LayoutGrid, Wallet, Coins, Trophy, Droplets, BarChart3, Plus, Search as SearchIcon, Settings, Bell, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { useFactoryMarkets } from "@/hooks/useFactory";
+import { useMarket } from "@/hooks/useMarket";
+import { LayoutGrid, Wallet, Coins, Trophy, Droplets, BarChart3, Plus, Search as SearchIcon, Settings } from "lucide-react";
+
+function MarketCommandItem({ address, index, onSelect }: { address: `0x${string}`; index: number; onSelect: (path: string) => void }) {
+  const { question } = useMarket(address);
+  if (!question) return null;
+  return (
+    <CommandItem value={question} onSelect={() => onSelect(`/markets/${index}`)}>
+      <span className="font-display">{question}</span>
+    </CommandItem>
+  );
+}
 
 export const CommandPalette = () => {
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const wallet = useWallet();
+  const { allMarkets } = useFactoryMarkets();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -24,7 +34,6 @@ export const CommandPalette = () => {
   }, []);
 
   const go = (path: string) => { setOpen(false); router.push(path); };
-  const act = (fn: () => void) => { setOpen(false); fn(); };
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
@@ -44,20 +53,17 @@ export const CommandPalette = () => {
         <CommandSeparator />
         <CommandGroup heading="Actions">
           <CommandItem onSelect={() => go("/markets/create")}><Plus /> Create market</CommandItem>
-          <CommandItem onSelect={() => act(() => wallet.openWallet("deposit"))}><ArrowDownLeft /> Deposit</CommandItem>
-          <CommandItem onSelect={() => act(() => wallet.openWallet("withdraw"))}><ArrowUpRight /> Withdraw</CommandItem>
-          <CommandItem onSelect={() => act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "?" })))}>
-            <Bell /> Show keyboard shortcuts
-          </CommandItem>
         </CommandGroup>
-        <CommandSeparator />
-        <CommandGroup heading="Markets">
-          {MARKETS.map((m) => (
-            <CommandItem key={m.id} value={m.question} onSelect={() => go(`/markets/${m.id}`)}>
-              <span className="font-display">{m.question}</span>
-            </CommandItem>
-          ))}
-        </CommandGroup>
+        {allMarkets.length > 0 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="Markets">
+              {allMarkets.map((addr, i) => (
+                <MarketCommandItem key={addr} address={addr} index={i} onSelect={go} />
+              ))}
+            </CommandGroup>
+          </>
+        )}
       </CommandList>
     </CommandDialog>
   );

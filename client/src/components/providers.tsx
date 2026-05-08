@@ -6,8 +6,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 import "@rainbow-me/rainbowkit/styles.css";
 import { config } from "@/lib/wagmi";
-import { WalletProvider } from "@/lib/wallet";
-import { NotificationsProvider } from "@/lib/notifications";
 import { SettingsProvider } from "@/lib/settings";
 import { WatchlistProvider } from "@/lib/watchlist";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -22,14 +20,10 @@ export function Providers({ children }: { children: ReactNode }) {
         <RainbowKitProvider theme={darkTheme()}>
           <TooltipProvider>
             <SettingsProvider>
-              <WalletProvider>
-                <NotificationsProvider>
-                  <WatchlistProvider>
-                    {children}
-                    <Toaster />
-                  </WatchlistProvider>
-                </NotificationsProvider>
-              </WalletProvider>
+              <WatchlistProvider>
+                {children}
+                <Toaster />
+              </WatchlistProvider>
             </SettingsProvider>
           </TooltipProvider>
         </RainbowKitProvider>

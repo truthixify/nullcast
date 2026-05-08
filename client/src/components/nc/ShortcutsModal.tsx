@@ -2,12 +2,11 @@
 
 /**
  * Keyboard shortcuts overlay. Triggered by `?` key.
- * Also handles G+M, G+P, G+V, G+L, G+S, G+A jump shortcuts and "N" for New market.
+ * Handles G+M, G+P, G+V, G+L, G+S, G+A jump shortcuts and "N" for New market.
  */
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useWallet } from "@/lib/wallet";
 
 const GROUPS: { heading: string; rows: [string[], string][] }[] = [
   {
@@ -26,7 +25,6 @@ const GROUPS: { heading: string; rows: [string[], string][] }[] = [
     rows: [
       [["N"], "New market"],
       [["⌘", "K"], "Search / command palette"],
-      [["W"], "Open wallet"],
       [["?"], "Show this cheatsheet"],
     ],
   },
@@ -36,7 +34,6 @@ export const ShortcutsModal = () => {
   const [open, setOpen] = useState(false);
   const [pendingG, setPendingG] = useState(false);
   const router = useRouter();
-  const wallet = useWallet();
 
   useEffect(() => {
     let gTimer: ReturnType<typeof setTimeout> | null = null;
@@ -69,7 +66,6 @@ export const ShortcutsModal = () => {
       }
 
       if (k === "n") { e.preventDefault(); router.push("/markets/create"); return; }
-      if (k === "w") { e.preventDefault(); wallet.openWallet("deposit"); return; }
     };
 
     window.addEventListener("keydown", onKey);
@@ -77,7 +73,7 @@ export const ShortcutsModal = () => {
       window.removeEventListener("keydown", onKey);
       if (gTimer) clearTimeout(gTimer);
     };
-  }, [pendingG, router, wallet]);
+  }, [pendingG, router]);
 
   return (
     <>
