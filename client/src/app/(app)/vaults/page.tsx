@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/nc/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, RefreshCw, ArrowRight, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 
 type DepositStep = "idle" | "encrypting" | "approving" | "writing" | "confirming" | "confirmed" | "error";
 
@@ -217,10 +218,20 @@ export default function VaultsPage() {
   const vaults = (allVaults as `0x${string}`[]) || [];
   const [syncing, setSyncing] = useState(false);
 
-  const handleSync = async () => {
+  const handleSync = () => {
     setSyncing(true);
-    try { await fetch("/api/keeper"); } catch { /* ignore */ }
-    setSyncing(false);
+    fetch("/api/keeper")
+      .then((r) => r.json())
+      .then((data) => {
+        const vaultUpdates = data.vaults?.filter((v: { action: string }) => v.action.includes("shares=")).length ?? 0;
+        if (vaultUpdates > 0) {
+          toast.success(`Synced ${vaultUpdates} vault${vaultUpdates > 1 ? "s" : ""}`);
+        } else {
+          toast.info("Nothing to sync — vaults are up to date");
+        }
+      })
+      .catch(() => toast.error("Sync failed — check server logs"))
+      .finally(() => setSyncing(false));
   };
 
   return (

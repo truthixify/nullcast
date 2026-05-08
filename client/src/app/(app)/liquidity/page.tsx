@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/nc/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCw, AlertTriangle, Eye } from "lucide-react";
+import { toast } from "sonner";
 
 type DepositStep = "idle" | "encrypting" | "approving" | "writing" | "confirming" | "confirmed" | "error";
 
@@ -252,10 +253,20 @@ export default function LiquidityPage() {
   const { allMarkets, isLoading } = useFactoryMarkets();
   const [syncing, setSyncing] = useState(false);
 
-  const handleSync = async () => {
+  const handleSync = () => {
     setSyncing(true);
-    try { await fetch("/api/keeper"); } catch { /* ignore */ }
-    setSyncing(false);
+    // Fire and forget — keeper can take minutes (relayer polling + on-chain txs)
+    fetch("/api/keeper")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.updated > 0) {
+          toast.success(`Synced ${data.updated} pool${data.updated > 1 ? "s" : ""}`);
+        } else {
+          toast.info("Nothing to sync — pools are up to date");
+        }
+      })
+      .catch(() => toast.error("Sync failed — check server logs"))
+      .finally(() => setSyncing(false));
   };
 
   return (
