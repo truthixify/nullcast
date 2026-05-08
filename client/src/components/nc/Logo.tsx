@@ -1,11 +1,8 @@
 /**
  * NullCast logo — a stylized null-set "Ø" rendered as a precision-engraved
- * coin edge: outer ring, inner ring, diagonal slash. Gold on charcoal.
+ * coin edge: outer ring, inner ring, diagonal slash.
  *
- * Variants:
- *   <Logo />              → mark + wordmark, default size
- *   <Logo mark />         → mark only (square, scales to font-size by default)
- *   <Logo size={28} />    → custom mark height in px
+ * Uses CSS variable --primary so it changes with accent color settings.
  */
 import { cn } from "@/lib/utils";
 
@@ -26,23 +23,11 @@ export const LogoMark = ({ size = 24, className }: { size?: number; className?: 
     className={className}
     aria-hidden="true"
   >
-    <defs>
-      <linearGradient id="nc-gold" x1="6" y1="4" x2="26" y2="28" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="hsl(42 75% 70%)" />
-        <stop offset="55%" stopColor="hsl(42 62% 55%)" />
-        <stop offset="100%" stopColor="hsl(38 55% 42%)" />
-      </linearGradient>
-      <linearGradient id="nc-slash" x1="8" y1="8" x2="24" y2="24" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="hsl(42 80% 78%)" />
-        <stop offset="100%" stopColor="hsl(42 62% 55%)" />
-      </linearGradient>
-    </defs>
-
     {/* Outer engraved ring */}
-    <circle cx="16" cy="16" r="13.25" stroke="url(#nc-gold)" strokeWidth="1.5" />
+    <circle cx="16" cy="16" r="13.25" stroke="hsl(var(--primary))" strokeWidth="1.5" />
 
     {/* Inner hairline — coin edge / privacy boundary */}
-    <circle cx="16" cy="16" r="9.75" stroke="url(#nc-gold)" strokeWidth="0.6" opacity="0.55" />
+    <circle cx="16" cy="16" r="9.75" stroke="hsl(var(--primary))" strokeWidth="0.6" opacity="0.55" />
 
     {/* Null-set slash, ends extend slightly past the ring */}
     <line
@@ -50,13 +35,13 @@ export const LogoMark = ({ size = 24, className }: { size?: number; className?: 
       y1="25.5"
       x2="25.5"
       y2="6.5"
-      stroke="url(#nc-slash)"
+      stroke="hsl(var(--primary-glow))"
       strokeWidth="1.6"
       strokeLinecap="round"
     />
 
     {/* Tiny center dot — the secret, sealed */}
-    <circle cx="16" cy="16" r="0.9" fill="hsl(42 62% 55%)" />
+    <circle cx="16" cy="16" r="0.9" fill="hsl(var(--primary))" />
   </svg>
 );
 
