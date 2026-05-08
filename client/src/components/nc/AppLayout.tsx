@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, type ReactNode } from "react";
+import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAccount, useReadContract, useSignTypedData } from "wagmi";
@@ -15,7 +15,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { mockcUSDTConfig } from "@/lib/contracts";
 import { useMintCUSDT } from "@/hooks/useCUSDT";
-import { Menu, Search, Plus, Settings as SettingsIcon, Wallet, Copy, ExternalLink, Coins, Eye } from "lucide-react";
+import { Menu, Search, Plus, Settings as SettingsIcon, Wallet, Copy, ExternalLink, Coins } from "lucide-react";
 
 const NAV = [
   { to: "/markets",   label: "Markets" },
@@ -81,7 +81,20 @@ function WalletSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
   const { address } = useAccount();
   const { mint, isWriting, isConfirming, isConfirmed } = useMintCUSDT();
   const [copied, setCopied] = useState(false);
+  const [mintDone, setMintDone] = useState(false);
   const { balance, isDecrypting, decrypt, hasHandle } = useCUSDTBalance();
+
+  // Auto-decrypt when sheet opens and balance hasn't been decrypted yet
+  const autoDecryptTriggered = useRef(false);
+  useEffect(() => {
+    if (open && hasHandle && balance === null && !isDecrypting && !autoDecryptTriggered.current) {
+      autoDecryptTriggered.current = true;
+      decrypt();
+    }
+    if (!open) {
+      autoDecryptTriggered.current = false;
+    }
+  }, [open, hasHandle, balance, isDecrypting, decrypt]);
 
   const handleCopy = () => {
     if (!address) return;
@@ -94,6 +107,14 @@ function WalletSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
     if (!address) return;
     mint(address, BigInt(10_000_000_000));
   };
+
+  // Reset mint button after confirmation so user isn't confused
+  useEffect(() => {
+    if (isConfirmed && !mintDone) {
+      setMintDone(true);
+      setTimeout(() => setMintDone(false), 2000);
+    }
+  }, [isConfirmed, mintDone]);
 
   const truncated = address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "";
 
@@ -117,24 +138,19 @@ function WalletSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
             </div>
           </div>
 
-          {/* cUSDT Balance — encrypted, needs decryption */}
+          {/* cUSDT Balance */}
           <div>
             <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-fg-3 mb-2">cUSDT Balance</div>
             {balance !== null ? (
               <div className="font-mono tnum text-3xl text-primary">
                 {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-            ) : hasHandle ? (
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-lg text-fg-3 tracking-wider">●●●●●●●●</span>
-                <Button variant="outline" size="sm" onClick={decrypt} disabled={isDecrypting}
-                  className="text-primary border-primary/30 h-7 px-2.5 text-[11px]">
-                  <Eye className="w-3 h-3" />
-                  {isDecrypting ? "Decrypting..." : "Reveal"}
-                </Button>
-              </div>
+            ) : isDecrypting ? (
+              <div className="font-mono text-lg text-fg-3 animate-pulse">Decrypting...</div>
             ) : (
-              <div className="font-mono text-lg text-fg-3">0.00</div>
+              <div className="font-mono text-lg text-fg-3">
+                {hasHandle ? "●●●●●●●●" : "0.00"}
+              </div>
             )}
             <div className="font-mono text-[10px] text-fg-4 mt-1">ERC-7984 · encrypted on-chain</div>
           </div>
@@ -142,9 +158,9 @@ function WalletSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
           {/* Quick actions */}
           <div className="space-y-2">
             <Button variant="primary" className="w-full" onClick={handleMint}
-              disabled={isWriting || isConfirming}>
+              disabled={isWriting || isConfirming || mintDone}>
               <Coins className="h-3.5 w-3.5" />
-              {isWriting ? "Confirm in wallet..." : isConfirming ? "Minting..." : isConfirmed ? "Minted 10B cUSDT" : "Mint test cUSDT"}
+              {isWriting ? "Confirm in wallet..." : isConfirming ? "Minting..." : mintDone ? "Minted!" : "Mint test cUSDT"}
             </Button>
 
             {address && (
