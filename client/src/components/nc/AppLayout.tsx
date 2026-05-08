@@ -79,7 +79,7 @@ function useCUSDTBalance() {
 
 function WalletSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const { address } = useAccount();
-  const { mint, isWriting, isConfirming } = useMintCUSDT();
+  const { mint, hash: mintHash, isWriting, isConfirming, isConfirmed: isMintConfirmed } = useMintCUSDT();
   const [copied, setCopied] = useState(false);
   const { balance, isDecrypting, decrypt, hasHandle } = useCUSDTBalance();
 
@@ -137,6 +137,24 @@ function WalletSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
             )}
             <div className="font-mono text-[10px] text-fg-4 mt-1">ERC-7984 · encrypted on-chain</div>
           </div>
+
+          {/* Mint success message */}
+          {isMintConfirmed && mintHash && (
+            <div className="p-3 rounded border border-yes/20 bg-yes/[0.04] animate-fade-in">
+              <p className="text-yes text-xs font-medium mb-1">Minted 10,000 cUSDT</p>
+              <p className="text-fg-3 text-[11px]">
+                Transaction confirmed.{" "}
+                <a
+                  href={`https://sepolia.etherscan.io/tx/${mintHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  View on Etherscan →
+                </a>
+              </p>
+            </div>
+          )}
 
           {/* Quick actions */}
           <div className="space-y-2">
