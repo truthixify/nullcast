@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useCallback, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useAccount, useReadContract } from "wagmi";
+import { useAccount, useReadContract, useSignTypedData } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { getRelayer } from "@/lib/fhevm";
 import { CommandPalette } from "@/components/nc/CommandPalette";
 import { Logo } from "@/components/nc/Logo";
 import { TickerRail } from "@/components/nc/TickerRail";
@@ -14,7 +15,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { mockcUSDTConfig } from "@/lib/contracts";
 import { useMintCUSDT } from "@/hooks/useCUSDT";
-import { Menu, Search, Plus, Settings as SettingsIcon, Wallet, Copy, ExternalLink, LogOut, Coins } from "lucide-react";
+import { Menu, Search, Plus, Settings as SettingsIcon, Wallet, Copy, ExternalLink, Coins, Eye } from "lucide-react";
 
 const NAV = [
   { to: "/markets",   label: "Markets" },
@@ -25,19 +26,62 @@ const NAV = [
   { to: "/activity",  label: "Activity" },
 ];
 
+function useCUSDTBalance() {
+  const { address } = useAccount();
+  const { signTypedDataAsync } = useSignTypedData();
+  const [balance, setBalance] = useState<number | null>(null);
+  const [isDecrypting, setIsDecrypting] = useState(false);
+
+  const { data: balanceHandle } = useReadContract({
+    ...mockcUSDTConfig,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address, refetchInterval: 15_000 },
+  });
+
+  const isZero = !balanceHandle || String(balanceHandle).toLowerCase() === "0x" + "0".repeat(64);
+
+  const decrypt = useCallback(async () => {
+    if (!address || isZero || !balanceHandle) return;
+    setIsDecrypting(true);
+    try {
+      const relayer = await getRelayer();
+      const keypair = await relayer.generateKeypair();
+      const startTimestamp = Math.floor(Date.now() / 1000);
+      const contractAddr = mockcUSDTConfig.address as `0x${string}`;
+      const eip712 = await relayer.createEIP712(keypair.publicKey, [contractAddr], startTimestamp, 1);
+      const primaryType = eip712.primaryType || Object.keys(eip712.types).find((k: string) => k !== "EIP712Domain") || "UserDecryptRequestVerification";
+      const signature = await signTypedDataAsync({
+        types: eip712.types as Record<string, Array<{ name: string; type: string }>>,
+        primaryType,
+        domain: eip712.domain as { name: string; version: string; chainId: number; verifyingContract: `0x${string}` },
+        message: eip712.message as Record<string, unknown>,
+      });
+      const result = await relayer.userDecrypt({
+        handles: [balanceHandle as `0x${string}`],
+        contractAddress: contractAddr,
+        signedContractAddresses: [contractAddr],
+        privateKey: keypair.privateKey,
+        publicKey: keypair.publicKey,
+        signature,
+        signerAddress: address,
+        startTimestamp,
+        durationDays: 1,
+      });
+      const val = result[balanceHandle as `0x${string}`] as bigint;
+      setBalance(Number(val) / 1e6);
+    } catch { /* user rejected or KMS error */ }
+    finally { setIsDecrypting(false); }
+  }, [address, isZero, balanceHandle, signTypedDataAsync]);
+
+  return { balance, isDecrypting, decrypt, hasHandle: !isZero };
+}
+
 function WalletSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const { address } = useAccount();
   const { mint, isWriting, isConfirming, isConfirmed } = useMintCUSDT();
   const [copied, setCopied] = useState(false);
-
-  const { data: balanceRaw } = useReadContract({
-    ...mockcUSDTConfig,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address, refetchInterval: 10_000 },
-  });
-
-  const balance = balanceRaw ? (Number(balanceRaw) / 1e6) : 0;
+  const { balance, isDecrypting, decrypt, hasHandle } = useCUSDTBalance();
 
   const handleCopy = () => {
     if (!address) return;
@@ -73,12 +117,25 @@ function WalletSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
             </div>
           </div>
 
-          {/* cUSDT Balance */}
+          {/* cUSDT Balance — encrypted, needs decryption */}
           <div>
             <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-fg-3 mb-2">cUSDT Balance</div>
-            <div className="font-mono tnum text-3xl text-primary">
-              {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </div>
+            {balance !== null ? (
+              <div className="font-mono tnum text-3xl text-primary">
+                {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            ) : hasHandle ? (
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-lg text-fg-3 tracking-wider">●●●●●●●●</span>
+                <Button variant="outline" size="sm" onClick={decrypt} disabled={isDecrypting}
+                  className="text-primary border-primary/30 h-7 px-2.5 text-[11px]">
+                  <Eye className="w-3 h-3" />
+                  {isDecrypting ? "Decrypting..." : "Reveal"}
+                </Button>
+              </div>
+            ) : (
+              <div className="font-mono text-lg text-fg-3">0.00</div>
+            )}
             <div className="font-mono text-[10px] text-fg-4 mt-1">ERC-7984 · encrypted on-chain</div>
           </div>
 
@@ -110,25 +167,6 @@ function WalletSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
         </div>
       </SheetContent>
     </Sheet>
-  );
-}
-
-function CUSDTBalance() {
-  const { address } = useAccount();
-  const { data: balanceRaw } = useReadContract({
-    ...mockcUSDTConfig,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address, refetchInterval: 15_000 },
-  });
-  const balance = balanceRaw ? (Number(balanceRaw) / 1e6) : 0;
-  if (!address) return null;
-  return (
-    <span className="font-mono text-primary tnum">
-      {balance >= 1_000_000 ? `${(balance / 1_000_000).toFixed(1)}M` :
-       balance >= 1_000 ? `${(balance / 1_000).toFixed(1)}k` :
-       balance.toFixed(0)}
-    </span>
   );
 }
 
@@ -237,8 +275,8 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
                           onClick={() => setWalletOpen(true)}
                           className="flex items-center gap-2 h-8 px-2.5 sm:px-3 rounded bg-surface-2 border border-subtle hover:border-strong transition-colors text-xs"
                         >
+                          <Wallet className="h-3 w-3 text-fg-3" />
                           <span className="font-mono text-fg-2 hidden sm:inline">{account.displayName}</span>
-                          <CUSDTBalance />
                         </button>
                       </div>
                     )}
