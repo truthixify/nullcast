@@ -38,14 +38,14 @@ export function useLiquidityPool(poolAddress: `0x${string}`) {
 export function useIsLP(poolAddress: `0x${string}`, userAddress?: `0x${string}`) {
   const config = getPoolConfig(poolAddress);
 
-  const { data, isLoading } = useReadContract({
+  const { data, isLoading, refetch } = useReadContract({
     ...config,
     functionName: "isLP",
     args: userAddress ? [userAddress] : undefined,
-    query: { enabled: !!userAddress },
+    query: { enabled: !!userAddress, refetchInterval: 10_000 },
   });
 
-  return { isLP: data as boolean | undefined, isLoading };
+  return { isLP: data as boolean | undefined, isLoading, refetch };
 }
 
 /**

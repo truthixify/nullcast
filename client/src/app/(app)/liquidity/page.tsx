@@ -40,7 +40,7 @@ function MarketLPCard({ marketAddress, marketIndex }: { marketAddress: `0x${stri
   const zeroAddr = "0x0000000000000000000000000000000000000000" as `0x${string}`;
 
   const { totalLiquidity } = useLiquidityPool(isZeroPool ? zeroAddr : poolAddress);
-  const { isLP } = useIsLP(isZeroPool ? zeroAddr : poolAddress, userAddress);
+  const { isLP, refetch: refetchIsLP } = useIsLP(isZeroPool ? zeroAddr : poolAddress, userAddress);
 
   const addLiq = useAddLiquidity(isZeroPool ? zeroAddr : poolAddress);
   const withdrawLiq = useWithdrawLiquidity(isZeroPool ? zeroAddr : poolAddress);
@@ -94,10 +94,19 @@ function MarketLPCard({ marketAddress, marketIndex }: { marketAddress: `0x${stri
   const prevConfirmed = useRef(false);
   useEffect(() => {
     if (addLiq.isConfirmed && !prevConfirmed.current && depositStep === "confirming") {
-      prevConfirmed.current = true; setDepositStep("confirmed");
+      prevConfirmed.current = true;
+      setDepositStep("confirmed");
+      // Reset UI after deposit: close form, clear decrypted share so user can re-decrypt
+      setShareDecrypted(null);
+      refetchIsLP();
+      setTimeout(() => {
+        setShowDepositForm(false);
+        setDepositStep("idle");
+        setAmount("100");
+      }, 1500);
     }
     if (!addLiq.isConfirmed) prevConfirmed.current = false;
-  }, [addLiq.isConfirmed, depositStep]);
+  }, [addLiq.isConfirmed, depositStep, refetchIsLP]);
 
   const handleDeposit = useCallback(async () => {
     if (!userAddress || isZeroPool || !poolAddress || amountNum <= 0) return;
@@ -168,6 +177,18 @@ function MarketLPCard({ marketAddress, marketIndex }: { marketAddress: `0x${stri
           <div className="font-mono text-xl text-fg tracking-tight">{fmtUSD(totalLiquidity)}</div>
         </div>
       </div>
+
+      {/* Success after deposit */}
+      {depositStep === "confirmed" && addLiq.hash && (
+        <div className="p-3 rounded border border-yes/20 bg-yes/[0.04] mb-4 animate-fade-in">
+          <p className="text-yes text-xs font-medium mb-1">Liquidity added</p>
+          <p className="text-fg-3 text-[11px]">
+            Your share will update shortly.{" "}
+            <a href={`https://sepolia.etherscan.io/tx/${addLiq.hash}`} target="_blank" rel="noopener noreferrer"
+              className="text-primary hover:underline">View on Etherscan →</a>
+          </p>
+        </div>
+      )}
 
       {!showDepositForm ? (
         <div className="flex gap-2">
